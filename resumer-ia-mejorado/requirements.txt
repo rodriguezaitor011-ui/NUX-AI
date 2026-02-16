@@ -1,4 +1,4 @@
-# NUX IA - Requirements for Production
+# NUX IA - Requirements for Production (Simplified)
 
 # Core
 fastapi==0.109.0
@@ -19,9 +19,9 @@ slowapi==0.1.9
 # Environment
 python-dotenv==1.0.0
 
-# Database (PostgreSQL)
-psycopg2-binary==2.9.9
-sqlalchemy==2.0.25
+# Security (authentication)
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
 
 # Security
 passlib[bcrypt]==1.7.4
