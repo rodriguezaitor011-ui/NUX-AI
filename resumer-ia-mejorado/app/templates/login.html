@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - NUX IA</title>
+<link rel="stylesheet" href="/static/css/landing.css">
+<style>
+.login-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--dark-bg);
+    padding: 24px;
+}
+
+.login-box {
+    background: var(--dark-panel);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 48px;
+    max-width: 400px;
+    width: 100%;
+}
+
+.login-box h1 {
+    font-size: 32px;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.login-box p {
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.form-group {
+    margin-bottom: 24px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="password"] {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--dark-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 15px;
+    font-family: 'Satoshi', sans-serif;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--primary-purple);
+    box-shadow: 0 0 0 3px rgba(222, 76, 245, 0.1);
+}
+
+.btn-login {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary-purple);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Satoshi', sans-serif;
+    margin-bottom: 16px;
+}
+
+.btn-login:hover {
+    opacity: 0.9;
+}
+
+.btn-login:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toggle-mode {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.toggle-mode a {
+    color: var(--primary-purple);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.error-message {
+    background: rgba(255, 50, 50, 0.1);
+    border: 1px solid rgba(255, 50, 50, 0.3);
+    padding: 12px;
+    border-radius: 8px;
+    color: #ff5050;
+    margin-bottom: 24px;
+    font-size: 14px;
+    display: none;
+}
+</style>
+</head>
+
+<body class="dark">
+
+<div class="login-container">
+    <div class="login-box">
+        <h1>🧠 NUX IA</h1>
+        <p id="subtitle">Inicia sesión para continuar</p>
+
+        <div class="error-message" id="error-message"></div>
+
+        <form id="auth-form" onsubmit="handleSubmit(event)">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" required>
+            </div>
+
+            <div class="form-group" id="username-field" style="display:none;">
+                <label for="username">Nombre de usuario</label>
+                <input type="text" id="username" minlength="3" maxlength="50">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" required minlength="6">
+            </div>
+
+            <div class="form-group" id="privacy-field" style="display:none;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="accept_privacy" style="width: auto;">
+                    <span style="font-size: 13px;">Acepto la <a href="/privacy" target="_blank" style="color: var(--primary-purple);">política de privacidad</a></span>
+                </label>
+            </div>
+
+            <button type="submit" class="btn-login" id="submit-btn">Iniciar sesión</button>
+        </form>
+
+        <div class="toggle-mode">
+            <span id="toggle-text">¿No tienes cuenta? <a href="#" onclick="toggleMode(event)">Regístrate</a></span>
+        </div>
+    </div>
+</div>
+
+<script>
+let isLogin = true;
+
+function toggleMode(e) {
+    e.preventDefault();
+    isLogin = !isLogin;
+    
+    const subtitle = document.getElementById('subtitle');
+    const submitBtn = document.getElementById('submit-btn');
+    const toggleText = document.getElementById('toggle-text');
+    const usernameField = document.getElementById('username-field');
+    const privacyField = document.getElementById('privacy-field');
+    const usernameInput = document.getElementById('username');
+    const privacyInput = document.getElementById('accept_privacy');
+    
+    if (isLogin) {
+        subtitle.textContent = 'Inicia sesión para continuar';
+        submitBtn.textContent = 'Iniciar sesión';
+        toggleText.innerHTML = '¿No tienes cuenta? <a href="#" onclick="toggleMode(event)">Regístrate</a>';
+        usernameField.style.display = 'none';
+        privacyField.style.display = 'none';
+        usernameInput.required = false;
+        privacyInput.required = false;
+    } else {
+        subtitle.textContent = 'Crea tu cuenta gratis';
+        submitBtn.textContent = 'Crear cuenta';
+        toggleText.innerHTML = '¿Ya tienes cuenta? <a href="#" onclick="toggleMode(event)">Inicia sesión</a>';
+        usernameField.style.display = 'block';
+        privacyField.style.display = 'block';
+        usernameInput.required = true;
+        privacyInput.required = true;
+    }
+    
+    hideError();
+}
+
+function showError(message) {
+    const errorDiv = document.getElementById('error-message');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+}
+
+function hideError() {
+    document.getElementById('error-message').style.display = 'none';
+}
+
+async function handleSubmit(e) {
+    e.preventDefault();
+    hideError();
+    
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const username = document.getElementById('username').value;
+    const acceptPrivacy = document.getElementById('accept_privacy').checked;
+    const submitBtn = document.getElementById('submit-btn');
+    
+    // Validar privacidad en registro
+    if (!isLogin && !acceptPrivacy) {
+        showError('Debes aceptar la política de privacidad');
+        return;
+    }
+    
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Procesando...';
+    
+    try {
+        const endpoint = isLogin ? '/login' : '/register';
+        const body = isLogin 
+            ? { email, password }
+            : { email, username, password, accept_privacy: acceptPrivacy };
+        
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            // Guardar token y datos de usuario
+            localStorage.setItem('auth_token', data.access_token);
+            localStorage.setItem('user_email', data.user.email);
+            localStorage.setItem('user_username', data.user.username);
+            localStorage.setItem('user_id', data.user.id);
+            localStorage.setItem('user_is_pro', data.user.is_pro);
+            
+            // Redirect a app
+            window.location.href = '/app';
+        } else {
+            showError(data.error || 'Error al procesar la solicitud');
+            submitBtn.disabled = false;
+            submitBtn.textContent = isLogin ? 'Iniciar sesión' : 'Crear cuenta';
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showError('Error de conexión. Intenta de nuevo.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = isLogin ? 'Iniciar sesión' : 'Crear cuenta';
+    }
+}
+</script>
+
+</body>
+</html>
