@@ -1,6 +1,6 @@
 import logging
 import json
-from fastapi import APIRouter, Request, Form, UploadFile, File
+from fastapi import APIRouter, Request, Form, UploadFile, File, Depends
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator
@@ -9,13 +9,13 @@ from slowapi.util import get_remote_address
 from typing import Optional, List, Dict
 import PyPDF2
 import io
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+from app.database import get_db, User, ChatHistory
+from app.auth import verify_password, get_password_hash, create_access_token, decode_token
 
 from app.config import settings
 from app.services.ai_orchestrator import process_document_pipeline, chat_with_document
-
-# IMPORTS SIMPLIFICADOS (sin SQLAlchemy)
-from app.database import get_user_by_username, get_user_by_email, create_user, save_chat_message
-from app.auth import verify_password, get_password_hash, create_access_token, decode_token
 
 #Router
 router = APIRouter()
@@ -38,7 +38,6 @@ document_cache = {}
 async def landing_page(request: Request):
     """Landing page principal"""
     return templates.TemplateResponse("landing.html", {"request": request})
-    
 logger = logging.getLogger(__name__)
 
 @router.get("/login", response_class=HTMLResponse)
@@ -49,29 +48,56 @@ async def login_page(request: Request):
 
 class ResumenRequest(BaseModel):
     """Modelo de validación para el request de resumen"""
-    texto: str = Field(..., min_length=10, max_length=settings.MAX_TEXT_LENGTH)
-    instrucciones: Optional[str] = ""
-    modo: str = "general"
-    task: str = "summary"
-    
+    texto: str = Field(..., min_length=10, description="Texto a resumir")
+    instrucciones: str = Field(default="", max_length=200)
+    modo: str = Field(default="general", description="Modo de resumen")
+    task: str = Field(default="summary", description="Tarea: summary o flashcards")
+
+    @field_validator('texto')
+    @classmethod
+    def texto_no_vacio(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError('El texto no puede estar vacío')
+        return v
+
     @field_validator('modo')
-    def validar_modo(cls, v):
-        if v not in MODOS_VALIDOS:
-            raise ValueError(f'Modo debe ser uno de: {", ".join(MODOS_VALIDOS)}')
+    @classmethod
+    def modo_valido(cls, v: str) -> str:
+        if v not in MODOS_VALIDOS and v != "flashcards":
+            return "general"
         return v
 
 
+class ChatRequest(BaseModel):
+    """Modelo de validación para el chat"""
+    session_id: str = Field(..., description="ID de sesión")
+    pregunta: str = Field(..., min_length=1)
+    historial: List[Dict[str, str]] = Field(default=[])
+
+
 @router.get("/app", response_class=HTMLResponse)
-async def app_page(request: Request):
-    """Página principal de la aplicación"""
-    return templates.TemplateResponse("index.html", {"request": request})
+async def app_dashboard(request: Request):
+    """Página principal"""
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "texto": "",
+            "instrucciones": "",
+            "modo": "general",
+            "resumen": None,
+            "estructura": None,
+            "error_msg": None,
+            "processing_status": None
+        }
+    )
 
 
 @router.post("/resumir", response_class=HTMLResponse)
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
 async def resumir(
     request: Request,
-    texto: str = Form(None),
+    texto: str = Form(None),  # Ahora es opcional
     instrucciones: str = Form(""),
     modo: str = Form("general"),
     task: str = Form("summary"),
@@ -138,7 +164,7 @@ async def resumir(
             texto=texto,
             instrucciones=instrucciones,
             modo=modo,
-            task=task
+            task=task  # ← Usar el parámetro task directamente
         )
         
 
@@ -164,11 +190,11 @@ async def resumir(
         
         # Guardar estructura en caché para el chat
         if estructura:
-            session_id = str(hash(datos.texto[:100]))
+            session_id = str(hash(datos.texto[:100]))  # Simple hash para sesión
             document_cache[session_id] = {
                 "summary": resultado,
                 "structure": estructura,
-                "original_text": datos.texto[:5000]
+                "original_text": datos.texto[:5000]  # Solo primeros 5k para referencia
             }
             processing_status.append(f"✅ Documento procesado: {estructura.get('tema_principal', 'N/A')}")
         
@@ -190,7 +216,7 @@ async def resumir(
         # Si es una petición AJAX (desde JS), devolver JSON
         if request.headers.get("X-Requested-With") == "XMLHttpRequest" or \
            request.headers.get("Accept", "").startswith("application/json"):
-            return JSONResponse(content={
+           return JSONResponse(content={
                 "resumen": resultado if datos.task not in ["flashcards", "mindmap"] else None,
                 "flashcards": resultado if datos.task == "flashcards" else None,
                 "mindmap": resultado if datos.task == "mindmap" else None,
@@ -214,50 +240,56 @@ async def resumir(
         logger.error(f"Error inesperado: {e}", exc_info=True)
         return templates.TemplateResponse("index.html", {
             "request": request,
-            "texto": texto if 'texto' in locals() else "",
-            "error_msg": f"Error del servidor: {str(e)}",
+            "texto": texto,
+            "error_msg": "Error inesperado. Por favor intenta de nuevo.",
             "processing_status": processing_status
         })
 
 
-class ChatRequest(BaseModel):
-    """Modelo para peticiones de chat"""
-    question: str
-    session_id: Optional[str] = None
-    mode: str = "sources"
-
-
 @router.post("/chat")
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
-async def chat_endpoint(request: Request, data: ChatRequest):
+async def chat(request: Request, chat_data: ChatRequest):
     """
-    Endpoint de chat mejorado
+    Endpoint de chat con DeepSeek v3
+    Usa el resumen comprimido como contexto
     """
     try:
-        logger.info(f"Chat request - Mode: {data.mode}, Session: {data.session_id}")
+        # Recuperar documento de caché
+        doc_data = document_cache.get(chat_data.session_id)
         
-        # Verificar si hay documento en caché
-        doc_context = None
-        if data.session_id and data.session_id in document_cache:
-            doc_context = document_cache[data.session_id]
+        if not doc_data:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "Sesión no encontrada. Genera primero un resumen."}
+            )
         
-        # Llamar al chat
-        response_text = await chat_with_document(
-            question=data.question,
-            document_context=doc_context,
-            mode=data.mode
+        logger.info(f"Chat request para sesión {chat_data.session_id}")
+        
+        # Llamar al tutor con contexto comprimido
+        respuesta, error_msg = await chat_with_document(
+            summary=doc_data["summary"],
+            structure=doc_data["structure"],
+            question=chat_data.pregunta,
+            history=chat_data.historial
         )
         
+        if error_msg:
+            return JSONResponse(
+                status_code=500,
+                content={"error": error_msg}
+            )
+        
         return JSONResponse(content={
-            "answer": response_text,
-            "mode": data.mode
+            "respuesta": respuesta,
+            "modelo": "DeepSeek v3",
+            "tema": doc_data["structure"].get("tema_principal", "N/A")
         })
         
     except Exception as e:
         logger.error(f"Error en chat: {e}", exc_info=True)
         return JSONResponse(
             status_code=500,
-            content={"error": f"Error procesando pregunta: {str(e)}"}
+            content={"error": "Error al procesar la pregunta"}
         )
 
 
@@ -265,61 +297,208 @@ async def chat_endpoint(request: Request, data: ChatRequest):
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
 async def chat_general_stream(request: Request):
     """
-    Chat general sin documento (streaming)
+    Chat general con streaming (Server-Sent Events)
     """
     try:
         data = await request.json()
-        question = data.get("question", "")
+        logger.info(f"📩 Chat-general-stream - Data recibida: {data}")
         
-        if not question:
+        pregunta = data.get("pregunta", "")
+        historial = data.get("historial", [])
+        
+        logger.info(f"📝 Pregunta: '{pregunta}' (len: {len(pregunta)})")
+        logger.info(f"📚 Historial: {len(historial)} items")
+        
+        if not pregunta or not pregunta.strip():
+            logger.warning(f"⚠️ Pregunta vacía! Data: {data}")
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": "Pregunta vacía",
+                    "debug": {
+                        "received_pregunta": pregunta,
+                        "received_keys": list(data.keys())
+                    }
+                }
+            )
+        
+        logger.info(f"✅ Chat general streaming desde {request.client.host}")
+        
+        async def generate():
+            from app.services.ai_orchestrator import ModelOrchestrator
+            import httpx
+            
+            async with ModelOrchestrator() as orchestrator:
+                # Construir mensajes
+                messages = [
+                    {
+                        "role": "system",
+                        "content": "Eres StudIA, un asistente de estudio inteligente y amigable. Ayudas a los estudiantes con cualquier pregunta académica o de conocimiento general. Responde de forma clara, precisa y educativa. Usa Markdown para formatear tus respuestas (negritas, listas, etc)."
+                    }
+                ]
+                
+                # Historial
+                for item in historial[-5:]:
+                    messages.append({"role": "user", "content": item["pregunta"]})
+                    messages.append({"role": "assistant", "content": item["respuesta"]})
+                
+                # Pregunta actual
+                messages.append({"role": "user", "content": pregunta})
+                
+                # Llamar a DeepSeek con streaming
+                try:
+                    payload = {
+                        "model": "deepseek-chat",
+                        "messages": messages,
+                        "max_tokens": 1024,
+                        "temperature": 0.7,
+                        "stream": True
+                    }
+                    
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        async with client.stream(
+                            "POST",
+                            "https://api.deepseek.com/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}",
+                                "Content-Type": "application/json"
+                            },
+                            json=payload
+                        ) as response:
+                            async for line in response.aiter_lines():
+                                if line.startswith("data: "):
+                                    data_str = line[6:]
+                                    
+                                    if data_str == "[DONE]":
+                                        yield "data: [DONE]\n\n"
+                                        break
+                                    
+                                    try:
+                                        import json
+                                        chunk_data = json.loads(data_str)
+                                        
+                                        if chunk_data.get("choices"):
+                                            delta = chunk_data["choices"][0].get("delta", {})
+                                            content = delta.get("content", "")
+                                            
+                                            if content:
+                                                yield f"data: {json.dumps({'content': content})}\n\n"
+                                    except:
+                                        pass
+                        
+                except Exception as e:
+                    logger.error(f"Error en streaming: {e}")
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error en chat streaming: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Error al procesar la pregunta"}
+        )
+
+
+@router.post("/chat-general")
+@limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
+async def chat_general(request: Request):
+    """
+    Chat general sin restricciones de documentos
+    DeepSeek v3 responde cualquier pregunta
+    """
+    try:
+        data = await request.json()
+        pregunta = data.get("pregunta", "")
+        historial = data.get("historial", [])
+        
+        if not pregunta:
             return JSONResponse(
                 status_code=400,
                 content={"error": "Pregunta vacía"}
             )
         
-        logger.info(f"Chat general: {question[:100]}")
+        logger.info(f"Chat general request desde {request.client.host}")
         
-        # Usar DeepSeek para chat general
+        # Importar DeepSeek client
         from app.services.ai_orchestrator import ModelOrchestrator
         
         async with ModelOrchestrator() as orchestrator:
+            # Construir mensajes sin contexto de documento
             messages = [
-                {"role": "system", "content": "Eres un asistente educativo útil y amigable. Responde de forma clara y concisa."},
-                {"role": "user", "content": question}
+                {
+                    "role": "system",
+                    "content": "Eres StudIA, un asistente de estudio inteligente y amigable. Ayudas a los estudiantes con cualquier pregunta académica o de conocimiento general. Responde de forma clara, precisa y educativa."
+                }
             ]
             
-            response = await orchestrator._call_deepseek(
+            # Añadir historial (últimas 5 interacciones)
+            for item in historial[-5:]:
+                messages.append({"role": "user", "content": item["pregunta"]})
+                messages.append({"role": "assistant", "content": item["respuesta"]})
+            
+            # Pregunta actual
+            messages.append({"role": "user", "content": pregunta})
+            
+            # Llamar a DeepSeek
+            respuesta = await orchestrator._call_deepseek(
                 messages=messages,
-                max_tokens=2000,
+                max_tokens=1024,
                 temperature=0.7
             )
             
-            if not response:
+            if not respuesta:
                 return JSONResponse(
                     status_code=500,
                     content={"error": "Error al generar respuesta"}
                 )
             
             return JSONResponse(content={
-                "answer": response,
-                "model": "DeepSeek v3"
+                "respuesta": respuesta,
+                "modelo": "DeepSeek v3"
             })
-            
+        
     except Exception as e:
         logger.error(f"Error en chat general: {e}", exc_info=True)
         return JSONResponse(
             status_code=500,
-            content={"error": f"Error: {str(e)}"}
+            content={"error": "Error al procesar la pregunta"}
         )
 
 
-# === AUTH ROUTES (SIMPLIFICADAS SIN SQLALCHEMY) ===
+@router.get("/status/{session_id}")
+async def get_session_status(session_id: str):
+    """Endpoint para verificar estado de sesión"""
+    doc_data = document_cache.get(session_id)
+    
+    if not doc_data:
+        return JSONResponse(
+            status_code=404,
+            content={"exists": False}
+        )
+    
+    return JSONResponse(content={
+        "exists": True,
+        "tema": doc_data["structure"].get("tema_principal", "N/A"),
+        "conceptos": doc_data["structure"].get("conceptos_clave", [])[:5]
+    })
+
+# ========================================
+# AUTH ENDPOINTS
+# ========================================
 
 class RegisterRequest(BaseModel):
     """Modelo para registro de usuario"""
-    email: str
-    username: str
-    password: str
+    email: str = Field(..., min_length=5, max_length=255)
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
     accept_privacy: bool = Field(default=False)
 
 class LoginRequest(BaseModel):
@@ -328,23 +507,15 @@ class LoginRequest(BaseModel):
     password: str
 
 @router.post("/register")
-async def register(data: RegisterRequest):
+async def register(data: RegisterRequest, db: Session = Depends(get_db)):
     """Registrar nuevo usuario"""
     try:
         # Verificar si el email ya existe
-        existing_user = get_user_by_email(data.email)
+        existing_user = db.query(User).filter(User.email == data.email).first()
         if existing_user:
             return JSONResponse(
                 status_code=400,
                 content={"error": "Email ya registrado"}
-            )
-        
-        # Verificar username
-        existing_username = get_user_by_username(data.username)
-        if existing_username:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Username ya existe"}
             )
         
         # Verificar que aceptó la política
@@ -356,22 +527,27 @@ async def register(data: RegisterRequest):
         
         # Crear usuario
         hashed_password = get_password_hash(data.password)
-        new_user = create_user(
-            username=data.username,
+        new_user = User(
             email=data.email,
+            username=data.username,
             hashed_password=hashed_password
         )
         
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
         # Crear token
-        token = create_access_token({"user_id": new_user['id'], "email": new_user['email']})
+        token = create_access_token({"user_id": new_user.id, "email": new_user.email})
         
         return JSONResponse(content={
             "access_token": token,
             "token_type": "bearer",
             "user": {
-                "id": new_user['id'],
-                "email": new_user['email'],
-                "username": new_user['username']
+                "id": new_user.id,
+                "email": new_user.email,
+                "username": new_user.username,
+                "is_pro": new_user.is_pro
             }
         })
         
@@ -383,28 +559,29 @@ async def register(data: RegisterRequest):
         )
 
 @router.post("/login")
-async def login(data: LoginRequest):
+async def login(data: LoginRequest, db: Session = Depends(get_db)):
     """Login de usuario"""
     try:
         # Buscar usuario
-        user = get_user_by_email(data.email)
+        user = db.query(User).filter(User.email == data.email).first()
         
-        if not user or not verify_password(data.password, user['hashed_password']):
+        if not user or not verify_password(data.password, user.hashed_password):
             return JSONResponse(
                 status_code=401,
                 content={"error": "Email o contraseña incorrectos"}
             )
         
         # Crear token
-        token = create_access_token({"user_id": user['id'], "email": user['email']})
+        token = create_access_token({"user_id": user.id, "email": user.email})
         
         return JSONResponse(content={
             "access_token": token,
             "token_type": "bearer",
             "user": {
-                "id": user['id'],
-                "email": user['email'],
-                "username": user['username']
+                "id": user.id,
+                "email": user.email,
+                "username": user.username,  # ← AÑADIDO
+                "is_pro": user.is_pro
             }
         })
         
@@ -421,7 +598,10 @@ async def privacy_page(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
 
 @router.post("/save-chat")
-async def save_chat(request: Request):
+async def save_chat(
+    request: Request,
+    db: Session = Depends(get_db)
+):
     """Guardar mensaje de chat en historial"""
     try:
         data = await request.json()
@@ -435,7 +615,7 @@ async def save_chat(request: Request):
                 content={"error": "No autenticado"}
             )
         
-        # Decodificar token para obtener user info
+        # Decodificar token para obtener user_id
         payload = decode_token(token)
         if not payload:
             return JSONResponse(
@@ -443,22 +623,16 @@ async def save_chat(request: Request):
                 content={"error": "Token inválido"}
             )
         
-        # Obtener username del payload (necesitamos añadirlo al token)
-        user_email = payload.get("email")
-        user = get_user_by_email(user_email)
+        user_id = payload.get("user_id")
         
-        if not user:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "Usuario no encontrado"}
-            )
-        
-        # Guardar chat
-        save_chat_message(
-            username=user['username'],
+        # Guardar en DB
+        chat_entry = ChatHistory(
+            user_id=user_id,
             message=message,
             response=response
         )
+        db.add(chat_entry)
+        db.commit()
         
         return JSONResponse(content={"success": True})
         
