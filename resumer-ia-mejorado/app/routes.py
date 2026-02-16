@@ -10,7 +10,7 @@ from typing import Optional, List, Dict
 import PyPDF2
 import io
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+
 from app.database import get_db, User, ChatHistory
 from app.auth import verify_password, get_password_hash, create_access_token, decode_token
 
