@@ -1,6 +1,6 @@
 import logging
 import json
-from fastapi import APIRouter, Request, Form, UploadFile, File, Depends
+from fastapi import APIRouter, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, field_validator
@@ -9,13 +9,13 @@ from slowapi.util import get_remote_address
 from typing import Optional, List, Dict
 import PyPDF2
 import io
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from app.database import get_db, User, ChatHistory
-from app.auth import verify_password, get_password_hash, create_access_token, decode_token
 
 from app.config import settings
 from app.services.ai_orchestrator import process_document_pipeline, chat_with_document
+
+# IMPORTS SIMPLIFICADOS (sin SQLAlchemy)
+from app.database import get_user_by_username, get_user_by_email, create_user, save_chat_message
+from app.auth import verify_password, get_password_hash, create_access_token, decode_token
 
 #Router
 router = APIRouter()
@@ -38,6 +38,7 @@ document_cache = {}
 async def landing_page(request: Request):
     """Landing page principal"""
     return templates.TemplateResponse("landing.html", {"request": request})
+    
 logger = logging.getLogger(__name__)
 
 @router.get("/login", response_class=HTMLResponse)
@@ -48,56 +49,29 @@ async def login_page(request: Request):
 
 class ResumenRequest(BaseModel):
     """Modelo de validación para el request de resumen"""
-    texto: str = Field(..., min_length=10, description="Texto a resumir")
-    instrucciones: str = Field(default="", max_length=200)
-    modo: str = Field(default="general", description="Modo de resumen")
-    task: str = Field(default="summary", description="Tarea: summary o flashcards")
-
-    @field_validator('texto')
-    @classmethod
-    def texto_no_vacio(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError('El texto no puede estar vacío')
-        return v
-
+    texto: str = Field(..., min_length=10, max_length=settings.MAX_TEXT_LENGTH)
+    instrucciones: Optional[str] = ""
+    modo: str = "general"
+    task: str = "summary"
+    
     @field_validator('modo')
-    @classmethod
-    def modo_valido(cls, v: str) -> str:
-        if v not in MODOS_VALIDOS and v != "flashcards":
-            return "general"
+    def validar_modo(cls, v):
+        if v not in MODOS_VALIDOS:
+            raise ValueError(f'Modo debe ser uno de: {", ".join(MODOS_VALIDOS)}')
         return v
-
-
-class ChatRequest(BaseModel):
-    """Modelo de validación para el chat"""
-    session_id: str = Field(..., description="ID de sesión")
-    pregunta: str = Field(..., min_length=1)
-    historial: List[Dict[str, str]] = Field(default=[])
 
 
 @router.get("/app", response_class=HTMLResponse)
-async def app_dashboard(request: Request):
-    """Página principal"""
-    return templates.TemplateResponse(
-        "index.html",
-        {
-            "request": request,
-            "texto": "",
-            "instrucciones": "",
-            "modo": "general",
-            "resumen": None,
-            "estructura": None,
-            "error_msg": None,
-            "processing_status": None
-        }
-    )
+async def app_page(request: Request):
+    """Página principal de la aplicación"""
+    return templates.TemplateResponse("index.html", {"request": request})
 
 
 @router.post("/resumir", response_class=HTMLResponse)
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
 async def resumir(
     request: Request,
-    texto: str = Form(None),  # Ahora es opcional
+    texto: str = Form(None),
     instrucciones: str = Form(""),
     modo: str = Form("general"),
     task: str = Form("summary"),
@@ -164,7 +138,7 @@ async def resumir(
             texto=texto,
             instrucciones=instrucciones,
             modo=modo,
-            task=task  # ← Usar el parámetro task directamente
+            task=task
         )
         
 
@@ -190,11 +164,11 @@ async def resumir(
         
         # Guardar estructura en caché para el chat
         if estructura:
-            session_id = str(hash(datos.texto[:100]))  # Simple hash para sesión
+            session_id = str(hash(datos.texto[:100]))
             document_cache[session_id] = {
                 "summary": resultado,
                 "structure": estructura,
-                "original_text": datos.texto[:5000]  # Solo primeros 5k para referencia
+                "original_text": datos.texto[:5000]
             }
             processing_status.append(f"✅ Documento procesado: {estructura.get('tema_principal', 'N/A')}")
         
@@ -216,7 +190,7 @@ async def resumir(
         # Si es una petición AJAX (desde JS), devolver JSON
         if request.headers.get("X-Requested-With") == "XMLHttpRequest" or \
            request.headers.get("Accept", "").startswith("application/json"):
-           return JSONResponse(content={
+            return JSONResponse(content={
                 "resumen": resultado if datos.task not in ["flashcards", "mindmap"] else None,
                 "flashcards": resultado if datos.task == "flashcards" else None,
                 "mindmap": resultado if datos.task == "mindmap" else None,
@@ -240,57 +214,54 @@ async def resumir(
         logger.error(f"Error inesperado: {e}", exc_info=True)
         return templates.TemplateResponse("index.html", {
             "request": request,
-            "texto": texto,
-            "error_msg": "Error inesperado. Por favor intenta de nuevo.",
+            "texto": texto if 'texto' in locals() else "",
+            "error_msg": f"Error del servidor: {str(e)}",
             "processing_status": processing_status
         })
 
 
+class ChatRequest(BaseModel):
+    """Modelo para peticiones de chat"""
+    question: str
+    session_id: Optional[str] = None
+    mode: str = "sources"
+
+
 @router.post("/chat")
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
-async def chat(request: Request, chat_data: ChatRequest):
+async def chat_endpoint(request: Request, data: ChatRequest):
     """
-    Endpoint de chat con DeepSeek v3
-    Usa el resumen comprimido como contexto
+    Endpoint de chat mejorado
     """
     try:
-        # Recuperar documento de caché
-        doc_data = document_cache.get(chat_data.session_id)
+        logger.info(f"Chat request - Mode: {data.mode}, Session: {data.session_id}")
         
-        if not doc_data:
-            return JSONResponse(
-                status_code=404,
-                content={"error": "Sesión no encontrada. Genera primero un resumen."}
-            )
+        # Verificar si hay documento en caché
+        doc_context = None
+        if data.session_id and data.session_id in document_cache:
+            doc_context = document_cache[data.session_id]
         
-        logger.info(f"Chat request para sesión {chat_data.session_id}")
-        
-        # Llamar al tutor con contexto comprimido
-        respuesta, error_msg = await chat_with_document(
-            summary=doc_data["summary"],
-            structure=doc_data["structure"],
-            question=chat_data.pregunta,
-            history=chat_data.historial
+        # Llamar al chat
+        response_text = await chat_with_document(
+            question=data.question,
+            document_context=doc_context,
+            mode=data.mode
         )
         
-        if error_msg:
-            return JSONResponse(
-                status_code=500,
-                content={"error": error_msg}
-            )
-        
         return JSONResponse(content={
-            "respuesta": respuesta,
-            "modelo": "DeepSeek v3",
-            "tema": doc_data["structure"].get("tema_principal", "N/A")
+            "answer": response_text,
+            "mode": data.mode
         })
         
     except Exception as e:
         logger.error(f"Error en chat: {e}", exc_info=True)
         return JSONResponse(
             status_code=500,
-            content={"error": "Error al procesar la pregunta"}
+            content={"error": f"Error procesando pregunta: {str(e)}"}
         )
+
+
+# === AUTH ROUTES (SIMPLIFICADAS SIN SQLALCHEMY) ===
 
 
 @router.post("/chat-general-stream")
@@ -301,35 +272,27 @@ async def chat_general_stream(request: Request):
     """
     try:
         data = await request.json()
-        logger.info(f"📩 Chat-general-stream - Data recibida: {data}")
+        logger.info(f"📩 Chat-general-stream - Data: {data}")
         
         pregunta = data.get("pregunta", "")
         historial = data.get("historial", [])
         
-        logger.info(f"📝 Pregunta: '{pregunta}' (len: {len(pregunta)})")
-        logger.info(f"📚 Historial: {len(historial)} items")
+        logger.info(f"📝 Pregunta: '{pregunta}' | Historial: {len(historial)} items")
         
         if not pregunta or not pregunta.strip():
-            logger.warning(f"⚠️ Pregunta vacía! Data: {data}")
+            logger.warning(f"⚠️ Pregunta vacía! Keys: {list(data.keys())}")
             return JSONResponse(
                 status_code=400,
-                content={
-                    "error": "Pregunta vacía",
-                    "debug": {
-                        "received_pregunta": pregunta,
-                        "received_keys": list(data.keys())
-                    }
-                }
+                content={"error": "Pregunta vacía", "debug": list(data.keys())}
             )
         
-        logger.info(f"✅ Chat general streaming desde {request.client.host}")
+        logger.info(f"✅ Iniciando streaming desde {request.client.host}")
         
         async def generate():
             from app.services.ai_orchestrator import ModelOrchestrator
             import httpx
             
             async with ModelOrchestrator() as orchestrator:
-                # Construir mensajes
                 messages = [
                     {
                         "role": "system",
@@ -339,8 +302,8 @@ async def chat_general_stream(request: Request):
                 
                 # Historial
                 for item in historial[-5:]:
-                    messages.append({"role": "user", "content": item["pregunta"]})
-                    messages.append({"role": "assistant", "content": item["respuesta"]})
+                    messages.append({"role": "user", "content": item.get("pregunta", "")})
+                    messages.append({"role": "assistant", "content": item.get("respuesta", "")})
                 
                 # Pregunta actual
                 messages.append({"role": "user", "content": pregunta})
@@ -385,7 +348,7 @@ async def chat_general_stream(request: Request):
                                                 yield f"data: {json.dumps({'content': content})}\n\n"
                                     except:
                                         pass
-                        
+                    
                 except Exception as e:
                     logger.error(f"Error en streaming: {e}")
                     yield f"data: {json.dumps({'error': str(e)})}\n\n"
@@ -407,98 +370,11 @@ async def chat_general_stream(request: Request):
         )
 
 
-@router.post("/chat-general")
-@limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
-async def chat_general(request: Request):
-    """
-    Chat general sin restricciones de documentos
-    DeepSeek v3 responde cualquier pregunta
-    """
-    try:
-        data = await request.json()
-        pregunta = data.get("pregunta", "")
-        historial = data.get("historial", [])
-        
-        if not pregunta:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Pregunta vacía"}
-            )
-        
-        logger.info(f"Chat general request desde {request.client.host}")
-        
-        # Importar DeepSeek client
-        from app.services.ai_orchestrator import ModelOrchestrator
-        
-        async with ModelOrchestrator() as orchestrator:
-            # Construir mensajes sin contexto de documento
-            messages = [
-                {
-                    "role": "system",
-                    "content": "Eres StudIA, un asistente de estudio inteligente y amigable. Ayudas a los estudiantes con cualquier pregunta académica o de conocimiento general. Responde de forma clara, precisa y educativa."
-                }
-            ]
-            
-            # Añadir historial (últimas 5 interacciones)
-            for item in historial[-5:]:
-                messages.append({"role": "user", "content": item["pregunta"]})
-                messages.append({"role": "assistant", "content": item["respuesta"]})
-            
-            # Pregunta actual
-            messages.append({"role": "user", "content": pregunta})
-            
-            # Llamar a DeepSeek
-            respuesta = await orchestrator._call_deepseek(
-                messages=messages,
-                max_tokens=1024,
-                temperature=0.7
-            )
-            
-            if not respuesta:
-                return JSONResponse(
-                    status_code=500,
-                    content={"error": "Error al generar respuesta"}
-                )
-            
-            return JSONResponse(content={
-                "respuesta": respuesta,
-                "modelo": "DeepSeek v3"
-            })
-        
-    except Exception as e:
-        logger.error(f"Error en chat general: {e}", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Error al procesar la pregunta"}
-        )
-
-
-@router.get("/status/{session_id}")
-async def get_session_status(session_id: str):
-    """Endpoint para verificar estado de sesión"""
-    doc_data = document_cache.get(session_id)
-    
-    if not doc_data:
-        return JSONResponse(
-            status_code=404,
-            content={"exists": False}
-        )
-    
-    return JSONResponse(content={
-        "exists": True,
-        "tema": doc_data["structure"].get("tema_principal", "N/A"),
-        "conceptos": doc_data["structure"].get("conceptos_clave", [])[:5]
-    })
-
-# ========================================
-# AUTH ENDPOINTS
-# ========================================
-
 class RegisterRequest(BaseModel):
     """Modelo para registro de usuario"""
-    email: str = Field(..., min_length=5, max_length=255)
-    username: str = Field(..., min_length=3, max_length=50)
-    password: str = Field(..., min_length=6)
+    email: str
+    username: str
+    password: str
     accept_privacy: bool = Field(default=False)
 
 class LoginRequest(BaseModel):
@@ -507,15 +383,23 @@ class LoginRequest(BaseModel):
     password: str
 
 @router.post("/register")
-async def register(data: RegisterRequest, db: Session = Depends(get_db)):
+async def register(data: RegisterRequest):
     """Registrar nuevo usuario"""
     try:
         # Verificar si el email ya existe
-        existing_user = db.query(User).filter(User.email == data.email).first()
+        existing_user = get_user_by_email(data.email)
         if existing_user:
             return JSONResponse(
                 status_code=400,
                 content={"error": "Email ya registrado"}
+            )
+        
+        # Verificar username
+        existing_username = get_user_by_username(data.username)
+        if existing_username:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Username ya existe"}
             )
         
         # Verificar que aceptó la política
@@ -527,27 +411,22 @@ async def register(data: RegisterRequest, db: Session = Depends(get_db)):
         
         # Crear usuario
         hashed_password = get_password_hash(data.password)
-        new_user = User(
-            email=data.email,
+        new_user = create_user(
             username=data.username,
+            email=data.email,
             hashed_password=hashed_password
         )
         
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        
         # Crear token
-        token = create_access_token({"user_id": new_user.id, "email": new_user.email})
+        token = create_access_token({"user_id": new_user['id'], "email": new_user['email']})
         
         return JSONResponse(content={
             "access_token": token,
             "token_type": "bearer",
             "user": {
-                "id": new_user.id,
-                "email": new_user.email,
-                "username": new_user.username,
-                "is_pro": new_user.is_pro
+                "id": new_user['id'],
+                "email": new_user['email'],
+                "username": new_user['username']
             }
         })
         
@@ -559,29 +438,28 @@ async def register(data: RegisterRequest, db: Session = Depends(get_db)):
         )
 
 @router.post("/login")
-async def login(data: LoginRequest, db: Session = Depends(get_db)):
+async def login(data: LoginRequest):
     """Login de usuario"""
     try:
         # Buscar usuario
-        user = db.query(User).filter(User.email == data.email).first()
+        user = get_user_by_email(data.email)
         
-        if not user or not verify_password(data.password, user.hashed_password):
+        if not user or not verify_password(data.password, user['hashed_password']):
             return JSONResponse(
                 status_code=401,
                 content={"error": "Email o contraseña incorrectos"}
             )
         
         # Crear token
-        token = create_access_token({"user_id": user.id, "email": user.email})
+        token = create_access_token({"user_id": user['id'], "email": user['email']})
         
         return JSONResponse(content={
             "access_token": token,
             "token_type": "bearer",
             "user": {
-                "id": user.id,
-                "email": user.email,
-                "username": user.username,  # ← AÑADIDO
-                "is_pro": user.is_pro
+                "id": user['id'],
+                "email": user['email'],
+                "username": user['username']
             }
         })
         
@@ -598,10 +476,7 @@ async def privacy_page(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
 
 @router.post("/save-chat")
-async def save_chat(
-    request: Request,
-    db: Session = Depends(get_db)
-):
+async def save_chat(request: Request):
     """Guardar mensaje de chat en historial"""
     try:
         data = await request.json()
@@ -615,7 +490,7 @@ async def save_chat(
                 content={"error": "No autenticado"}
             )
         
-        # Decodificar token para obtener user_id
+        # Decodificar token para obtener user info
         payload = decode_token(token)
         if not payload:
             return JSONResponse(
@@ -623,16 +498,22 @@ async def save_chat(
                 content={"error": "Token inválido"}
             )
         
-        user_id = payload.get("user_id")
+        # Obtener username del payload (necesitamos añadirlo al token)
+        user_email = payload.get("email")
+        user = get_user_by_email(user_email)
         
-        # Guardar en DB
-        chat_entry = ChatHistory(
-            user_id=user_id,
+        if not user:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Usuario no encontrado"}
+            )
+        
+        # Guardar chat
+        save_chat_message(
+            username=user['username'],
             message=message,
             response=response
         )
-        db.add(chat_entry)
-        db.commit()
         
         return JSONResponse(content={"success": True})
         
