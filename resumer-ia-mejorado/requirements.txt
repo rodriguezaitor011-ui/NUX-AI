@@ -20,7 +20,8 @@ slowapi==0.1.9
 python-dotenv==1.0.0
 
 # Security (authentication)
-passlib[bcrypt]==1.7.4
+ppasslib==1.7.4
+bcrypt==4.0.1
 python-jose[cryptography]==3.3.0
 
 # Security
