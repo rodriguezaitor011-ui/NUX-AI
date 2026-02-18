@@ -1,0 +1,202 @@
+{
+  "meta": {
+    "title": "NUX AI - Votre assistant d’étude intelligent",
+    "description": "Transformez vos notes en résumés, fiches et cartes mentales avec l’IA. Étudiez mieux, réussissez davantage."
+  },
+  "nav": {
+    "home": "Accueil",
+    "features": "Fonctionnalités",
+    "pricing": "Tarifs",
+    "login": "Se connecter",
+    "signup": "S’inscrire",
+    "logout": "Se déconnecter"
+  },
+  "hero": {
+    "title": "Étudiez mieux avec l’intelligence artificielle",
+    "subtitle": "Résumez des documents, créez des fiches automatiques et étudiez avec votre assistant IA personnel",
+    "cta_primary": "Commencer gratuitement",
+    "cta_secondary": "Voir la démo"
+  },
+  "features": {
+    "title": "Tout ce dont vous avez besoin pour réussir",
+    "summary": {
+      "title": "Résumés intelligents",
+      "description": "Téléchargez un PDF de 50 pages et obtenez un résumé parfait en 10 secondes"
+    },
+    "flashcards": {
+      "title": "Fiches automatiques",
+      "description": "Générez instantanément des cartes d’étude basées sur vos documents"
+    },
+    "mindmap": {
+      "title": "Cartes mentales",
+      "description": "Visualisez des concepts complexes avec des schémas générés par l’IA"
+    },
+    "chat": {
+      "title": "Discutez avec vos documents",
+      "description": "Posez n’importe quelle question sur votre matériel d’étude"
+    },
+    "pomodoro": {
+      "title": "Minuteur Pomodoro",
+      "description": "Étudiez avec la technique Pomodoro intégrée (25 min de concentration + 5 min de pause)"
+    },
+    "highlights": {
+      "title": "Surlignages et notes",
+      "description": "Marquez ce qui est important et ajoutez des notes personnelles"
+    }
+  },
+  "app": {
+    "upload": {
+      "title": "Téléchargez votre document",
+      "drag_drop": "Glissez votre PDF ici ou cliquez pour sélectionner",
+      "or_paste": "Ou collez votre texte",
+      "placeholder": "Collez ici le texte que vous souhaitez résumer...",
+      "supported": "Prend en charge les fichiers PDF et TXT jusqu’à 50 pages"
+    },
+    "modes": {
+      "title": "Mode",
+      "general": "Général",
+      "study": "Étude",
+      "short": "Court",
+      "professional": "Professionnel"
+    },
+    "tasks": {
+      "summary": "Résumé",
+      "flashcards": "Fiches",
+      "mindmap": "Carte mentale"
+    },
+    "buttons": {
+      "process": "Traiter le document",
+      "processing": "Traitement en cours...",
+      "clear": "Effacer",
+      "download": "Télécharger",
+      "copy": "Copier",
+      "export": "Exporter"
+    },
+    "chat": {
+      "title": "Discuter avec l’IA",
+      "placeholder": "Posez une question sur votre document...",
+      "send": "Envoyer",
+      "typing": "En train d’écrire...",
+      "no_document": "Téléchargez d’abord un document pour en discuter"
+    },
+    "results": {
+      "summary_title": "Votre résumé",
+      "flashcards_title": "Vos fiches",
+      "mindmap_title": "Votre carte mentale",
+      "question": "Question",
+      "answer": "Réponse",
+      "flip": "Retourner"
+    },
+    "highlights": {
+      "title": "Mes surlignages",
+      "empty": "Vous n’avez pas de surlignages enregistrés",
+      "add_note": "Ajouter une note",
+      "export": "Tout exporter",
+      "clear_all": "Tout effacer"
+    },
+    "pomodoro": {
+      "focus": "Concentration",
+      "break": "Pause",
+      "start": "Démarrer",
+      "pause": "Pause",
+      "reset": "Réinitialiser",
+      "sessions": "Sessions terminées"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Se connecter",
+      "email": "E-mail",
+      "password": "Mot de passe",
+      "remember": "Se souvenir de moi",
+      "forgot": "Mot de passe oublié ?",
+      "submit": "Se connecter",
+      "no_account": "Vous n’avez pas de compte ?",
+      "signup_link": "Inscrivez-vous ici"
+    },
+    "signup": {
+      "title": "Créer un compte",
+      "username": "Nom d’utilisateur",
+      "email": "E-mail",
+      "password": "Mot de passe",
+      "confirm_password": "Confirmer le mot de passe",
+      "accept_privacy": "J’accepte la politique de confidentialité",
+      "submit": "S’inscrire",
+      "have_account": "Vous avez déjà un compte ?",
+      "login_link": "Connectez-vous ici"
+    }
+  },
+  "pricing": {
+    "title": "Plans et tarifs",
+    "free": {
+      "name": "Gratuit",
+      "price": "$0",
+      "period": "/mois",
+      "features": [
+        "10 résumés par mois",
+        "Chat basique",
+        "Fiches limitées",
+        "Publicités"
+      ],
+      "cta": "Commencer gratuitement"
+    },
+    "pro": {
+      "name": "Pro",
+      "price": "$4.99",
+      "period": "/mois",
+      "badge": "Le plus populaire",
+      "features": [
+        "Résumés illimités",
+        "Chat avancé sans limites",
+        "Toutes les fonctionnalités",
+        "Sans publicités",
+        "Support prioritaire",
+        "Export en PDF/Word"
+      ],
+      "cta": "Essayer Pro"
+    },
+    "team": {
+      "name": "Équipe",
+      "price": "$14.99",
+      "period": "/mois",
+      "features": [
+        "Tout ce qui est inclus dans Pro",
+        "Jusqu’à 5 utilisateurs",
+        "Notes partagées",
+        "Tableau de bord d’équipe",
+        "Administration avancée"
+      ],
+      "cta": "Nous contacter"
+    }
+  },
+  "footer": {
+    "product": "Produit",
+    "company": "Entreprise",
+    "legal": "Légal",
+    "about": "À propos",
+    "blog": "Blog",
+    "careers": "Carrières",
+    "privacy": "Confidentialité",
+    "terms": "Conditions",
+    "contact": "Contact"
+  },
+  "messages": {
+    "success": {
+      "document_processed": "Document traité avec succès",
+      "copied": "Copié dans le presse-papiers",
+      "saved": "Enregistré avec succès",
+      "login": "Connexion réussie",
+      "signup": "Compte créé avec succès"
+    },
+    "errors": {
+      "upload_failed": "Échec du téléversement",
+      "processing_failed": "Échec du traitement",
+      "network_error": "Erreur de connexion",
+      "invalid_credentials": "E-mail ou mot de passe invalide",
+      "email_exists": "Cet e-mail est déjà enregistré",
+      "required_field": "Ce champ est requis",
+      "file_too_large": "Fichier trop volumineux (max 10 Mo)",
+      "unsupported_format": "Format non pris en charge"
+    }
+  }
+}
