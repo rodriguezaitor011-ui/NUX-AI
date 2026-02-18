@@ -1,0 +1,148 @@
+/* ============================================
+   NUX AI - i18n STYLES
+   Language Selector Component
+   ============================================ */
+
+.language-selector {
+    position: relative;
+    margin-left: 16px;
+}
+
+.lang-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.lang-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.lang-flag {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.lang-code {
+    font-size: 13px;
+    letter-spacing: 0.5px;
+}
+
+.lang-btn svg {
+    opacity: 0.6;
+    transition: transform 0.3s;
+}
+
+.lang-btn:hover svg {
+    opacity: 1;
+}
+
+/* Dropdown */
+.lang-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 180px;
+    background: rgba(20, 20, 30, 0.98);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    padding: 8px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+}
+
+.lang-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.lang-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 14px;
+    text-align: left;
+    transition: all 0.2s;
+}
+
+.lang-option:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.lang-option.active {
+    background: rgba(var(--primary-rgb), 0.15);
+    color: var(--primary);
+}
+
+.lang-option .lang-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.lang-option .check {
+    color: var(--primary);
+    font-weight: bold;
+    font-size: 16px;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .language-selector {
+        margin-left: auto;
+    }
+    
+    .lang-btn {
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+    
+    .lang-code {
+        display: none;
+    }
+    
+    .lang-dropdown {
+        right: 0;
+        left: auto;
+    }
+}
+
+/* Animation */
+@keyframes langFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.lang-dropdown.show {
+    animation: langFadeIn 0.2s ease-out;
+}
