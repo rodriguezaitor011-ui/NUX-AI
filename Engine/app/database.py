@@ -58,14 +58,28 @@ def load_users() -> List[Dict]:
     try:
         with open(USERS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except:
+    except (json.JSONDecodeError, IOError, OSError) as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error cargando usuarios: {e}")
         return []
 
 
 def save_users(users: List[Dict]):
-    """Save users to JSON"""
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(users, f, indent=2, ensure_ascii=False)
+    """Save users to JSON con escritura atómica"""
+    try:
+        import tempfile
+        import shutil
+        
+        temp_file = USERS_FILE + '.tmp'
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(users, f, indent=2, ensure_ascii=False)
+        shutil.move(temp_file, USERS_FILE)
+    except (IOError, OSError, json.JSONEncodeError) as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error guardando usuarios: {e}")
+        raise
 
 
 def load_chat_history() -> List[Dict]:
@@ -73,14 +87,28 @@ def load_chat_history() -> List[Dict]:
     try:
         with open(CHAT_HISTORY_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except:
+    except (json.JSONDecodeError, IOError, OSError) as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error cargando historial: {e}")
         return []
 
 
 def save_chat_history(history: List[Dict]):
-    """Save chat history to JSON"""
-    with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
-        json.dump(history, f, indent=2, ensure_ascii=False)
+    """Save chat history to JSON con escritura atómica"""
+    try:
+        import tempfile
+        import shutil
+        
+        temp_file = CHAT_HISTORY_FILE + '.tmp'
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
+        shutil.move(temp_file, CHAT_HISTORY_FILE)
+    except (IOError, OSError, json.JSONEncodeError) as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error guardando historial: {e}")
+        raise
 
 
 def get_user_by_username(username: str) -> Optional[Dict]:

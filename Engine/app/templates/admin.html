@@ -3,7 +3,6 @@
 
 <head>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5228198488593180"
-<<<<<<< HEAD
      crossorigin="anonymous"></script>
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-7E3VD5X7M2"></script>
 <script>
@@ -13,9 +12,6 @@
 
   gtag('config', 'G-7E3VD5X7M2');
 </script>
-=======
-     crossorigin="anonymous"></script>  
->>>>>>> 8970e442fbf323b24f3a10368de37b951e0f2808
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Panel Admin - NUX IA</title>
@@ -601,6 +597,16 @@ if (!token) {
 let activityChart = null;
 let currentPage = 1;
 
+// Helper function para hacer peticiones autenticadas
+async function fetchWithAuth(url, options = {}) {
+    const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    return fetch(url, { ...options, headers });
+}
+
 // Initialize
 async function init() {
     await Promise.all([
@@ -616,7 +622,7 @@ async function init() {
 // Load Stats
 async function loadStats() {
     try {
-        const response = await fetch(`/api/admin/stats?token=${token}`);
+        const response = await fetchWithAuth(`/api/admin/stats`);
         const data = await response.json();
         
         if (response.status === 403) {
@@ -644,7 +650,7 @@ async function loadStats() {
 // Load Activity Chart
 async function loadActivity() {
     try {
-        const response = await fetch(`/api/admin/activity?token=${token}&days=7`);
+        const response = await fetchWithAuth(`/api/admin/activity?days=7`);
         const data = await response.json();
         
         const ctx = document.getElementById('activityChart');
@@ -704,7 +710,7 @@ async function loadActivity() {
 // Load Recent Chats
 async function loadRecentChats() {
     try {
-        const response = await fetch(`/api/admin/recent-chats?token=${token}&limit=10`);
+        const response = await fetchWithAuth(`/api/admin/recent-chats?limit=10`);
         const data = await response.json();
         
         const container = document.getElementById('recent-activity');
@@ -738,9 +744,9 @@ async function loadRecentChats() {
 async function loadUsers(page = 1) {
     try {
         const search = document.getElementById('search-users').value;
-        const url = `/api/admin/users?token=${token}&page=${page}&limit=10${search ? '&search=' + search : ''}`;
+        const url = `/api/admin/users?page=${page}&limit=10${search ? '&search=' + encodeURIComponent(search) : ''}`;
         
-        const response = await fetch(url);
+        const response = await fetchWithAuth(url);
         const data = await response.json();
         
         const tbody = document.getElementById('users-tbody');
@@ -826,7 +832,7 @@ async function deleteUser(userId, username) {
     }
     
     try {
-        const response = await fetch(`/api/admin/users/${userId}?token=${token}`, {
+        const response = await fetchWithAuth(`/api/admin/users/${userId}`, {
             method: 'DELETE'
         });
         

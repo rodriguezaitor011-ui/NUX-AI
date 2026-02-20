@@ -13,10 +13,11 @@ import os
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
-# Lista de usuarios admin
-ADMIN_EMAILS = [
-    "rodriguezaitor011@gmail.com",  # Cambiar por tu email
-    "admin@nuxia.com"
+# Lista de usuarios admin (desde configuración)
+from app.config import settings
+
+ADMIN_EMAILS = settings.ADMIN_EMAILS if settings.ADMIN_EMAILS else [
+    "rodriguezaitor011@gmail.com",  # Fallback si no está configurado
 ]
 
 DATA_DIR = "data"
@@ -37,24 +38,54 @@ def load_json(filepath, default=None):
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except:
+    except (json.JSONDecodeError, IOError, OSError) as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error cargando {filepath}: {e}")
         return default
 
 def save_json(filepath, data):
-    """Guarda datos en JSON"""
+    """Guarda datos en JSON con manejo de errores mejorado"""
     try:
-        with open(filepath, 'w', encoding='utf-8') as f:
+        import tempfile
+        import shutil
+        
+        # Escribir a archivo temporal primero (atomic write)
+        temp_file = filepath + '.tmp'
+        with open(temp_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        # Mover archivo temporal al destino (operación atómica)
+        shutil.move(temp_file, filepath)
         return True
-    except:
+    except (IOError, OSError, json.JSONEncodeError) as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error guardando {filepath}: {e}")
         return False
 
 def is_admin(email: str) -> bool:
     """Verifica si el usuario es admin"""
     return email.lower() in [e.lower() for e in ADMIN_EMAILS]
 
+def get_token_from_request(request: Request, token_param: str = None) -> str:
+    """Extrae el token de headers Authorization o query params"""
+    # Intentar desde header Authorization primero
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header.split("Bearer ")[1]
+    
+    # Fallback a query param (para compatibilidad)
+    if token_param:
+        return token_param
+    
+    raise HTTPException(status_code=401, detail="Token requerido")
+
 def verify_admin_token(token: str):
     """Verifica que el token sea de un admin"""
+    if not token:
+        raise HTTPException(status_code=401, detail="Token requerido")
+    
     users = load_json(USERS_FILE, [])
     
     for user in users:
@@ -74,9 +105,10 @@ async def admin_panel(request: Request):
 
 
 @router.get("/api/admin/stats")
-async def get_admin_stats(token: str):
+async def get_admin_stats(request: Request, token: str = None):
     """Obtiene estadísticas generales"""
     try:
+        token = get_token_from_request(request, token)
         admin = verify_admin_token(token)
         
         users = load_json(USERS_FILE, [])
@@ -138,9 +170,10 @@ async def get_admin_stats(token: str):
 
 
 @router.get("/api/admin/users")
-async def get_users_list(token: str, page: int = 1, limit: int = 20, search: str = None):
+async def get_users_list(request: Request, token: str = None, page: int = 1, limit: int = 20, search: str = None):
     """Lista de usuarios"""
     try:
+        token = get_token_from_request(request, token)
         admin = verify_admin_token(token)
         
         users = load_json(USERS_FILE, [])
@@ -197,9 +230,10 @@ async def get_users_list(token: str, page: int = 1, limit: int = 20, search: str
 
 
 @router.get("/api/admin/activity")
-async def get_activity_log(token: str, days: int = 7):
+async def get_activity_log(request: Request, token: str = None, days: int = 7):
     """Actividad por día"""
     try:
+        token = get_token_from_request(request, token)
         admin = verify_admin_token(token)
         
         history = load_json(HISTORY_FILE, [])
@@ -231,9 +265,10 @@ async def get_activity_log(token: str, days: int = 7):
 
 
 @router.get("/api/admin/recent-chats")
-async def get_recent_chats(token: str, limit: int = 10):
+async def get_recent_chats(request: Request, token: str = None, limit: int = 10):
     """Chats recientes"""
     try:
+        token = get_token_from_request(request, token)
         admin = verify_admin_token(token)
         
         history = load_json(HISTORY_FILE, [])
@@ -266,9 +301,10 @@ async def get_recent_chats(token: str, limit: int = 10):
 
 
 @router.delete("/api/admin/users/{user_id}")
-async def delete_user(user_id: str, token: str):
+async def delete_user(user_id: str, request: Request, token: str = None):
     """Elimina usuario (deshabilitado por seguridad)"""
     try:
+        token = get_token_from_request(request, token)
         admin = verify_admin_token(token)
         
         # Por seguridad, no permitimos eliminar usuarios en esta versión
