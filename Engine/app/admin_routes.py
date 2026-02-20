@@ -1,22 +1,26 @@
 """
-Panel de Administración Simplificado - NUX IA
-Sin dependencia de base de datos
+Panel de Administración - NUX AI
+Compatible con sistema JWT actual
 """
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Header
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from datetime import datetime, timedelta
+from typing import Optional
 import json
 import os
+
+# Import auth system
+from app.auth import decode_token
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
-# Lista de usuarios admin
+# Lista de emails admin autorizados
 ADMIN_EMAILS = [
-    "rodriguezaitor011@gmail.com",  # Cambiar por tu email
-    "admin@nuxia.com"
+    "rodriguezaitor011@gmail.com",
+    "aitordev7@gmail.com",
 ]
 
 DATA_DIR = "data"
@@ -25,6 +29,7 @@ HISTORY_FILE = os.path.join(DATA_DIR, "chat_history.json")
 
 # Asegurar que existe el directorio
 os.makedirs(DATA_DIR, exist_ok=True)
+
 
 def load_json(filepath, default=None):
     """Carga datos desde JSON"""
@@ -37,34 +42,39 @@ def load_json(filepath, default=None):
     try:
         with open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except:
+    except Exception as e:
+        print(f"Error loading {filepath}: {e}")
         return default
 
-def save_json(filepath, data):
-    """Guarda datos en JSON"""
-    try:
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        return True
-    except:
-        return False
 
 def is_admin(email: str) -> bool:
     """Verifica si el usuario es admin"""
     return email.lower() in [e.lower() for e in ADMIN_EMAILS]
 
-def verify_admin_token(token: str):
-    """Verifica que el token sea de un admin"""
-    users = load_json(USERS_FILE, [])
+
+def verify_admin_from_token(authorization: Optional[str] = Header(None)):
+    """Verifica que el token JWT sea de un admin"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No autorizado - Token requerido")
     
-    for user in users:
-        if user.get('token') == token:
-            if is_admin(user.get('email', '')):
-                return user
-            else:
-                raise HTTPException(status_code=403, detail="No autorizado - Solo administradores")
+    # Extraer token
+    token = authorization.replace("Bearer ", "")
     
-    raise HTTPException(status_code=401, detail="Token inválido")
+    # Decodificar JWT
+    payload = decode_token(token)
+    
+    if not payload:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    
+    email = payload.get("email")
+    
+    if not email:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    
+    if not is_admin(email):
+        raise HTTPException(status_code=403, detail="Acceso denegado - Solo administradores")
+    
+    return payload
 
 
 @router.get("/admin", response_class=HTMLResponse)
@@ -73,11 +83,25 @@ async def admin_panel(request: Request):
     return templates.TemplateResponse("admin.html", {"request": request})
 
 
+@router.get("/api/admin/verify")
+async def verify_admin(authorization: Optional[str] = Header(None)):
+    """Verifica si el usuario es admin"""
+    try:
+        user = verify_admin_from_token(authorization)
+        return {
+            "is_admin": True,
+            "email": user.get("email"),
+            "user_id": user.get("user_id")
+        }
+    except HTTPException as e:
+        raise e
+
+
 @router.get("/api/admin/stats")
-async def get_admin_stats(token: str):
+async def get_admin_stats(authorization: Optional[str] = Header(None)):
     """Obtiene estadísticas generales"""
     try:
-        admin = verify_admin_token(token)
+        verify_admin_from_token(authorization)
         
         users = load_json(USERS_FILE, [])
         history = load_json(HISTORY_FILE, [])
@@ -87,17 +111,17 @@ async def get_admin_stats(token: str):
         
         # Usuarios última semana
         week_ago = (datetime.now() - timedelta(days=7)).isoformat()
-        users_week = len([u for u in users if u.get('created_at', '') >= week_ago])
+        users_week = sum(1 for u in users if u.get('created_at', '') >= week_ago)
         
         # Total chats
         total_chats = len(history)
         
         # Chats hoy
         today = datetime.now().date().isoformat()
-        chats_today = len([h for h in history if h.get('timestamp', '').startswith(today)])
+        chats_today = sum(1 for h in history if h.get('timestamp', '').startswith(today))
         
         # Chats semana
-        chats_week = len([h for h in history if h.get('timestamp', '') >= week_ago])
+        chats_week = sum(1 for h in history if h.get('timestamp', '') >= week_ago)
         
         # Usuario más activo
         user_counts = {}
@@ -113,7 +137,7 @@ async def get_admin_stats(token: str):
         return {
             "users": {
                 "total": total_users,
-                "today": 0,  # No tenemos este dato
+                "today": 0,
                 "week": users_week
             },
             "chats": {
@@ -131,24 +155,35 @@ async def get_admin_stats(token: str):
     except HTTPException as e:
         raise e
     except Exception as e:
+        print(f"Error in get_admin_stats: {e}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Error: {str(e)}"}
+            content={"error": f"Error del servidor: {str(e)}"}
         )
 
 
 @router.get("/api/admin/users")
-async def get_users_list(token: str, page: int = 1, limit: int = 20, search: str = None):
-    """Lista de usuarios"""
+async def get_users_list(
+    authorization: Optional[str] = Header(None),
+    page: int = 1,
+    limit: int = 20,
+    search: Optional[str] = None
+):
+    """Lista de usuarios con paginación"""
     try:
-        admin = verify_admin_token(token)
+        verify_admin_from_token(authorization)
         
         users = load_json(USERS_FILE, [])
         history = load_json(HISTORY_FILE, [])
         
         # Filtro búsqueda
         if search:
-            users = [u for u in users if search.lower() in u.get('username', '').lower() or search.lower() in u.get('email', '').lower()]
+            search_lower = search.lower()
+            users = [
+                u for u in users
+                if search_lower in u.get('username', '').lower()
+                or search_lower in u.get('email', '').lower()
+            ]
         
         # Total
         total = len(users)
@@ -164,14 +199,17 @@ async def get_users_list(token: str, page: int = 1, limit: int = 20, search: str
             username = user.get('username', 'Unknown')
             
             # Contar mensajes
-            chat_count = len([h for h in history if h.get('username') == username])
+            chat_count = sum(1 for h in history if h.get('username') == username)
             
             # Última actividad
             user_history = [h for h in history if h.get('username') == username]
-            last_activity = max([h.get('timestamp', '') for h in user_history]) if user_history else None
+            last_activity = max(
+                (h.get('timestamp', '') for h in user_history),
+                default=None
+            )
             
             users_data.append({
-                "id": user.get('id', user.get('username')),
+                "id": user.get('id', username),
                 "username": username,
                 "email": user.get('email', 'N/A'),
                 "created_at": user.get('created_at', datetime.now().isoformat()),
@@ -184,36 +222,42 @@ async def get_users_list(token: str, page: int = 1, limit: int = 20, search: str
             "users": users_data,
             "total": total,
             "page": page,
-            "pages": (total + limit - 1) // limit if total > 0 else 1
+            "pages": max(1, (total + limit - 1) // limit)
         }
         
     except HTTPException as e:
         raise e
     except Exception as e:
+        print(f"Error in get_users_list: {e}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Error: {str(e)}"}
+            content={"error": f"Error del servidor: {str(e)}"}
         )
 
 
 @router.get("/api/admin/activity")
-async def get_activity_log(token: str, days: int = 7):
-    """Actividad por día"""
+async def get_activity_log(
+    authorization: Optional[str] = Header(None),
+    days: int = 7
+):
+    """Actividad por día (últimos N días)"""
     try:
-        admin = verify_admin_token(token)
+        verify_admin_from_token(authorization)
         
         history = load_json(HISTORY_FILE, [])
         
         # Agrupar por día
         activity_by_day = {}
         for h in history:
-            date = h.get('timestamp', '')[:10]  # YYYY-MM-DD
-            activity_by_day[date] = activity_by_day.get(date, 0) + 1
+            timestamp = h.get('timestamp', '')
+            if timestamp:
+                date = timestamp[:10]  # YYYY-MM-DD
+                activity_by_day[date] = activity_by_day.get(date, 0) + 1
         
         # Últimos N días
         all_days = []
         for i in range(days):
-            date = (datetime.now() - timedelta(days=days-i-1)).date().isoformat()
+            date = (datetime.now() - timedelta(days=days - i - 1)).date().isoformat()
             all_days.append({
                 "date": date,
                 "count": activity_by_day.get(date, 0)
@@ -224,63 +268,53 @@ async def get_activity_log(token: str, days: int = 7):
     except HTTPException as e:
         raise e
     except Exception as e:
+        print(f"Error in get_activity_log: {e}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Error: {str(e)}"}
+            content={"error": f"Error del servidor: {str(e)}"}
         )
 
 
 @router.get("/api/admin/recent-chats")
-async def get_recent_chats(token: str, limit: int = 10):
+async def get_recent_chats(
+    authorization: Optional[str] = Header(None),
+    limit: int = 10
+):
     """Chats recientes"""
     try:
-        admin = verify_admin_token(token)
+        verify_admin_from_token(authorization)
         
         history = load_json(HISTORY_FILE, [])
         
         # Ordenar por timestamp descendente
-        history.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        sorted_history = sorted(
+            history,
+            key=lambda x: x.get('timestamp', ''),
+            reverse=True
+        )
         
-        recent = history[:limit]
+        recent = sorted_history[:limit]
         
-        chats_data = [
-            {
+        chats_data = []
+        for i, chat in enumerate(recent):
+            message = chat.get('message', '')
+            response = chat.get('response', '')
+            
+            chats_data.append({
                 "id": i,
                 "username": chat.get('username', 'Unknown'),
-                "message": chat.get('message', '')[:100] + "..." if len(chat.get('message', '')) > 100 else chat.get('message', ''),
-                "response": chat.get('response', '')[:100] + "..." if len(chat.get('response', '')) > 100 else chat.get('response', ''),
+                "message": message[:100] + "..." if len(message) > 100 else message,
+                "response": response[:100] + "..." if len(response) > 100 else response,
                 "timestamp": chat.get('timestamp', datetime.now().isoformat())
-            }
-            for i, chat in enumerate(recent)
-        ]
+            })
         
         return {"chats": chats_data}
         
     except HTTPException as e:
         raise e
     except Exception as e:
+        print(f"Error in get_recent_chats: {e}")
         return JSONResponse(
             status_code=500,
-            content={"error": f"Error: {str(e)}"}
-        )
-
-
-@router.delete("/api/admin/users/{user_id}")
-async def delete_user(user_id: str, token: str):
-    """Elimina usuario (deshabilitado por seguridad)"""
-    try:
-        admin = verify_admin_token(token)
-        
-        # Por seguridad, no permitimos eliminar usuarios en esta versión
-        return JSONResponse(
-            status_code=403,
-            content={"error": "Eliminación de usuarios deshabilitada por seguridad"}
-        )
-        
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Error: {str(e)}"}
+            content={"error": f"Error del servidor: {str(e)}"}
         )
