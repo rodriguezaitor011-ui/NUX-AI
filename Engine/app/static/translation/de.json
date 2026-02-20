@@ -1,0 +1,104 @@
+{
+  "meta": {
+    "title": "NUX AI - Dein Intelligenter Lernassistent",
+    "description": "Verwandle deine Notizen in Zusammenfassungen, Lernkarten und Mindmaps mit KI. Lerne besser, bestehe mehr."
+  },
+  "nav": {
+    "home": "Startseite",
+    "features": "Funktionen",
+    "pricing": "Preise",
+    "login": "Anmelden",
+    "signup": "Registrieren",
+    "logout": "Abmelden"
+  },
+  "app": {
+    "sources": {
+      "title": "Quellen",
+      "paste": "Text einfügen",
+      "upload": "Datei hochladen",
+      "add_document": "Dokument hinzufügen",
+      "empty_title": "Keine Dokumente",
+      "empty_hint": "Lade PDFs hoch oder füge Text ein, um zu beginnen"
+    },
+    "tools": {
+      "title": "Werkzeuge",
+      "summarize": "Zusammenfassen",
+      "summarize_desc": "Zusammenfassung",
+      "flashcards": "Lernkarten",
+      "flashcards_desc": "Studienkarten",
+      "analyze": "Analysieren",
+      "analyze_desc": "Struktur und Konzepte",
+      "mindmap": "Mindmap",
+      "mindmap_desc": "Konzeptuelle Visualisierung",
+      "created_content": "Erstellter Inhalt"
+    },
+    "chat": {
+      "title": "Chat mit NUX AI",
+      "mode_sources": "Nur Quellen",
+      "mode_general": "Mit Internet",
+      "new_conversation": "Neues Gespräch",
+      "welcome_title": "Hallo! Ich bin dein Lernassistent",
+      "welcome_hint": "Klicke auf die seitlichen Kapseln, um Dokumente hinzuzufügen oder Werkzeuge zu verwenden.",
+      "placeholder": "Stelle eine Frage zu deinen Dokumenten...",
+      "send": "Senden",
+      "typing": "Tippt..."
+    },
+    "modal": {
+      "rename_title": "Benenne dein Dokument",
+      "rename_hint": "Gib einen beschreibenden Namen zur einfachen Identifizierung",
+      "document_name": "Dokumentname",
+      "rename_placeholder": "Z.B.: Thema 12 - Photosynthese",
+      "paste_title": "Text oder Link einfügen",
+      "paste_name_placeholder": "Z.B.: Artikel über KI",
+      "paste_content_label": "Füge deinen Text oder Link hier ein",
+      "paste_content_placeholder": "Füge den vollständigen Text oder einen Weblink ein...\n\nWenn du einen Link einfügst, versuchen wir, den Inhalt automatisch zu extrahieren.",
+      "paste_hint": "💡 Unterstützt: Klartext, Webartikel, Google Docs (öffentlich)",
+      "add_document": "Dokument hinzufügen"
+    },
+    "pomodoro": {
+      "title": "Pomodoro Timer",
+      "focus": "Fokus",
+      "break": "Pause",
+      "start": "Starten",
+      "pause": "Pausieren",
+      "reset": "Zurücksetzen",
+      "sessions": "Abgeschlossene Sitzungen"
+    },
+    "highlights": {
+      "title": "Meine Markierungen",
+      "empty": "Du hast keine gespeicherten Markierungen",
+      "add_note": "Notiz hinzufügen",
+      "export": "Alles exportieren",
+      "clear_all": "Alles löschen"
+    },
+    "buttons": {
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "copy": "Kopieren",
+      "download": "Herunterladen",
+      "export": "Exportieren",
+      "clear": "Löschen"
+    },
+    "processing": "Verarbeitung läuft...",
+    "confirm_logout": "Bist du sicher, dass du dich abmelden möchtest?"
+  },
+  "messages": {
+    "success": {
+      "document_processed": "Dokument erfolgreich verarbeitet",
+      "copied": "In Zwischenablage kopiert",
+      "saved": "Erfolgreich gespeichert",
+      "login": "Angemeldet",
+      "signup": "Konto erfolgreich erstellt"
+    },
+    "errors": {
+      "upload_failed": "Upload fehlgeschlagen",
+      "processing_failed": "Verarbeitung fehlgeschlagen",
+      "network_error": "Verbindungsfehler",
+      "invalid_credentials": "Ungültige E-Mail oder Passwort",
+      "email_exists": "Diese E-Mail ist bereits registriert",
+      "required_field": "Dieses Feld ist erforderlich",
+      "file_too_large": "Datei zu groß (max 10MB)",
+      "unsupported_format": "Format nicht unterstützt"
+    }
+  }
+}
