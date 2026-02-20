@@ -12,14 +12,24 @@ import io
 
 from app.config import settings
 from app.services.ai_orchestrator import process_document_pipeline, chat_with_document
-from app.services.gemini_ocr import (
-    ocr_image_async,
-    OCRException,
-    OCRImageTooLarge,
-    OCRInvalidImage,
-    OCRLowQuality,
-    OCRBlockedOrEmpty,
-)
+
+# Logger (definir antes de usar en try/except)
+logger = logging.getLogger(__name__)
+
+# Import condicional de OCR (solo si está disponible)
+try:
+    from app.services.gemini_ocr import (
+        ocr_image_async,
+        OCRException,
+        OCRImageTooLarge,
+        OCRInvalidImage,
+        OCRLowQuality,
+        OCRBlockedOrEmpty,
+    )
+    OCR_AVAILABLE = True
+except (ImportError, ModuleNotFoundError) as e:
+    OCR_AVAILABLE = False
+    logger.warning(f"OCR no disponible: {e}. El endpoint /api/ocr-image estará deshabilitado.")
 
 # IMPORTS SIMPLIFICADOS (sin SQLAlchemy)
 from app.database import get_user_by_username, get_user_by_email, create_user, save_chat_message
@@ -49,8 +59,7 @@ OCR_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 async def landing_page(request: Request):
     """Landing page principal"""
     return templates.TemplateResponse("landing.html", {"request": request})
-    
-logger = logging.getLogger(__name__)
+
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -86,6 +95,12 @@ async def ocr_image_endpoint(request: Request, archivo: UploadFile = File(..., a
     Acepta multipart/form-data con campo 'image'. Devuelve el texto extraído
     para usarlo en Resumen/Flashcards.
     """
+    if not OCR_AVAILABLE:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "OCR no disponible. El módulo gemini_ocr no está disponible."},
+        )
+    
     if not archivo.filename:
         return JSONResponse(status_code=400, content={"error": "No se envió ningún archivo"})
 
