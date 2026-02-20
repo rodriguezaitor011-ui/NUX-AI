@@ -46,6 +46,39 @@
 - ✅ Tokens enviados en headers `Authorization`
 - ✅ Encoding correcto de parámetros de búsqueda (`encodeURIComponent`)
 
+### 5. **OCR de Apuntes Manuscritos (Feature diferencial NUX IA)**
+
+#### Configuración
+- ✅ `config.py`: `GEMINI_API_KEY`, `GEMINI_OCR_MODEL` (gemini-2.0-flash), `OCR_MAX_IMAGE_SIZE`, `OCR_ALLOWED_MIME_TYPES`
+- ✅ Método opcional `validate_gemini_ocr()` para validar la key solo cuando se usa OCR
+- ✅ Dependencia `google-generativeai` en `requirements.txt`
+
+#### Servicio OCR (`services/gemini_ocr.py`)
+- ✅ Extracción de texto desde imagen (bytes o base64) con Gemini 2.0 Flash Vision
+- ✅ Prompt optimizado para caligrafía manuscrita y apuntes
+- ✅ Limpieza y formateo del texto extraído
+- ✅ Validación de tamaño y tipo MIME antes de llamar a la API
+- ✅ Escritura atómica y manejo de errores específicos:
+  - `OCRImageTooLarge`, `OCRInvalidImage`, `OCRLowQuality`, `OCRBlockedOrEmpty`, `OCRException`
+- ✅ Versión asíncrona `ocr_image_async()` para no bloquear el event loop
+
+#### API
+- ✅ Endpoint `POST /api/ocr-image` (multipart, campo `image`)
+- ✅ Validación de formato (JPG, PNG, WebP, GIF) y tamaño máximo
+- ✅ Respuesta `{"text": "..."}` en éxito; códigos 400, 422, 502, 503, 500 con mensajes claros
+- ✅ Rate limiting aplicado
+
+#### Integración con el pipeline
+- ✅ El texto extraído se añade como fuente en el dashboard
+- ✅ Uso directo en **Resumen** y **Flashcards** con el flujo ya existente (sin cambios en el pipeline de IA)
+
+#### Frontend (UI/UX)
+- ✅ Botón **"Escanear apuntes"** con icono de cámara en la cápsula de Fuentes (colapsada y expandida)
+- ✅ Modal dedicado: selección de imagen, **vista previa** antes de subir
+- ✅ **Estado de carga** ("Extrayendo texto con Gemini...") mientras se procesa
+- ✅ Mensajes de error visibles (formato, tamaño, imagen ilegible)
+- ✅ Tras éxito: fuente añadida automáticamente y mensaje para usar Resumir o Flashcards
+
 ## 📋 Recomendaciones Adicionales (No Implementadas)
 
 ### 1. **Rendimiento**
@@ -161,6 +194,12 @@ ADMIN_EMAILS=admin1@example.com,admin2@example.com
 
 # CORS (opcional, por defecto permite todos)
 CORS_ORIGINS=https://tudominio.com,https://www.tudominio.com
+
+# OCR de apuntes manuscritos (opcional; si no se configura, el botón "Escanear apuntes" devolverá 503)
+GEMINI_API_KEY=tu_api_key_de_google_ai_studio
+# Opcionales:
+# GEMINI_OCR_MODEL=gemini-2.0-flash
+# OCR_MAX_IMAGE_SIZE=10485760
 ```
 
 ### Generar SECRET_KEY Segura
@@ -168,6 +207,12 @@ CORS_ORIGINS=https://tudominio.com,https://www.tudominio.com
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
+
+### Obtener GEMINI_API_KEY (para OCR)
+
+1. Entra en [Google AI Studio](https://aistudio.google.com/apikey).
+2. Crea o elige un proyecto y genera una API key.
+3. Añádela en `.env` como `GEMINI_API_KEY=...`.
 
 ## 📊 Impacto de las Mejoras
 
@@ -179,15 +224,18 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | **Manejo de Errores** | `except:` genérico | Específico con logging | ⭐⭐ Medio |
 | **Escritura JSON** | Directa (riesgo corrupción) | Atómica (segura) | ⭐⭐ Medio |
 | **Config Admin** | Hardcodeado | Variable de entorno | ⭐ Bajo |
+| **OCR apuntes** | No existía | Gemini Vision + pipeline integrado | ⭐⭐⭐ Alto |
 
 ## 🎯 Próximos Pasos Recomendados
 
 1. **Inmediato**: Configurar `SECRET_KEY` y `ADMIN_EMAILS` en `.env`
-2. **Corto plazo**: Implementar caché para estadísticas
-3. **Medio plazo**: Migrar a base de datos real (SQLite/PostgreSQL)
-4. **Largo plazo**: Implementar suite completa de tests
+2. **OCR**: Añadir `GEMINI_API_KEY` si quieres usar "Escanear apuntes"
+3. **Corto plazo**: Implementar caché para estadísticas
+4. **Medio plazo**: Migrar a base de datos real (SQLite/PostgreSQL)
+5. **Largo plazo**: Implementar suite completa de tests
 
 ---
 
-**Fecha de implementación**: 2026-02-20
-**Versión**: 2.1.0
+**Fecha de implementación**: 2026-02-20  
+**Última actualización**: 2026-02-20 (OCR de apuntes)  
+**Versión**: 2.2.0

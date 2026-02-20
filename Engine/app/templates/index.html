@@ -58,6 +58,9 @@ if (!token || !username) {
             <div class="capsule-icon" onclick="document.getElementById('archivo').click()" title="Subir archivo">
                 <i data-lucide="upload"></i>
             </div>
+            <div class="capsule-icon" onclick="mostrarOCRModal()" title="Escanear apuntes">
+                <i data-lucide="camera"></i>
+            </div>
         </div>
         <div class="capsule-expanded">
             <div class="capsule-header">
@@ -72,6 +75,10 @@ if (!token || !username) {
             <button class="add-source-btn" onclick="document.getElementById('archivo').click()">
                 <i data-lucide="plus" style="width:16px;height:16px"></i>
                 <span data-i18n="app.sources.add_document">Añadir documento</span>
+            </button>
+            <button class="add-source-btn ocr-btn" onclick="mostrarOCRModal()" style="margin-top:8px;background:linear-gradient(135deg,rgba(222,76,245,0.2),rgba(222,76,245,0.05));border:1px solid var(--primary)">
+                <i data-lucide="camera" style="width:16px;height:16px"></i>
+                <span>Escanear apuntes</span>
             </button>
             <div class="sources-content">
                 <div class="sources-list" id="sources-list">
@@ -283,6 +290,47 @@ if (!token || !username) {
     </div>
 </div>
 
+<!-- Modal: OCR Escanear apuntes -->
+<div class="modal-overlay" id="ocr-modal">
+    <div class="modal-dialog modal-large">
+        <div class="modal-header">
+            <h3>
+                <i data-lucide="camera" style="width:18px;height:18px;display:inline-block;vertical-align:middle;margin-right:8px"></i>
+                Escanear apuntes manuscritos
+            </h3>
+            <button class="modal-close" onclick="cerrarOCRModal()">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p style="color:var(--muted);margin-bottom:16px">Sube una foto de tus apuntes. Usamos IA (Gemini) para extraer el texto y luego podrás generar resúmenes o flashcards.</p>
+            <div class="input-group">
+                <label>Imagen del apunte</label>
+                <input type="file" id="ocr-file" accept="image/jpeg,image/png,image/webp,image/gif" class="modal-input" onchange="onOCRFileSelect(this)">
+            </div>
+            <div id="ocr-preview-wrap" class="ocr-preview-wrap" style="display:none;margin-top:16px">
+                <img id="ocr-preview" class="ocr-preview-img" alt="Vista previa">
+                <p id="ocr-filename" class="ocr-filename"></p>
+            </div>
+            <div id="ocr-loading" class="ocr-loading" style="display:none;margin-top:16px;text-align:center;padding:24px">
+                <div class="spinner" style="margin:0 auto 12px"></div>
+                <span>Extrayendo texto con Gemini...</span>
+            </div>
+            <div id="ocr-error" class="ocr-error" style="display:none;margin-top:12px;padding:12px;background:rgba(239,68,68,0.1);border:1px solid var(--danger);border-radius:8px;color:#fca5a5"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary-modal" onclick="cerrarOCRModal()" data-i18n="app.buttons.cancel">Cancelar</button>
+            <button class="btn-primary-modal" id="ocr-submit-btn" onclick="confirmarOCR()" disabled>Extraer texto</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.ocr-preview-wrap{text-align:center}
+.ocr-preview-img{max-width:100%;max-height:280px;border-radius:12px;border:1px solid var(--border);object-fit:contain}
+.ocr-filename{margin-top:8px;font-size:13px;color:var(--muted)}
+.ocr-loading span{color:var(--muted)}
+</style>
 <style>
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:10000;align-items:center;justify-content:center;animation:fadeIn 0.2s ease}
 .modal-overlay.active{display:flex}

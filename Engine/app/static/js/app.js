@@ -333,9 +333,145 @@ document.addEventListener('click', function(e) {
             cerrarRenameModal();
         } else if (e.target.id === 'paste-modal') {
             cerrarPasteModal();
+        } else if (e.target.id === 'ocr-modal') {
+            cerrarOCRModal();
         }
     }
 });
+
+// ========================================
+// MODAL: OCR Escanear apuntes (Gemini Vision)
+// ========================================
+
+let pendingOCRFile = null;
+
+function mostrarOCRModal() {
+    const modal = document.getElementById('ocr-modal');
+    const previewWrap = document.getElementById('ocr-preview-wrap');
+    const loading = document.getElementById('ocr-loading');
+    const errDiv = document.getElementById('ocr-error');
+    const submitBtn = document.getElementById('ocr-submit-btn');
+    const fileInput = document.getElementById('ocr-file');
+
+    pendingOCRFile = null;
+    fileInput.value = '';
+    previewWrap.style.display = 'none';
+    loading.style.display = 'none';
+    errDiv.style.display = 'none';
+    errDiv.textContent = '';
+    submitBtn.disabled = true;
+
+    modal.classList.add('active');
+    setTimeout(() => lucide.createIcons(), 100);
+}
+
+function cerrarOCRModal() {
+    document.getElementById('ocr-modal').classList.remove('active');
+    pendingOCRFile = null;
+}
+
+function onOCRFileSelect(input) {
+    const file = input.files[0];
+    const previewWrap = document.getElementById('ocr-preview-wrap');
+    const preview = document.getElementById('ocr-preview');
+    const filenameEl = document.getElementById('ocr-filename');
+    const submitBtn = document.getElementById('ocr-submit-btn');
+    const errDiv = document.getElementById('ocr-error');
+
+    errDiv.style.display = 'none';
+    errDiv.textContent = '';
+
+    if (!file) {
+        previewWrap.style.display = 'none';
+        submitBtn.disabled = true;
+        pendingOCRFile = null;
+        return;
+    }
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+        errDiv.textContent = 'Formato no permitido. Usa JPG, PNG, WebP o GIF.';
+        errDiv.style.display = 'block';
+        submitBtn.disabled = true;
+        pendingOCRFile = null;
+        return;
+    }
+
+    const maxMb = 10;
+    if (file.size > maxMb * 1024 * 1024) {
+        errDiv.textContent = 'La imagen es demasiado grande. Máximo ' + maxMb + ' MB.';
+        errDiv.style.display = 'block';
+        submitBtn.disabled = true;
+        pendingOCRFile = null;
+        return;
+    }
+
+    pendingOCRFile = file;
+    filenameEl.textContent = file.name + ' (' + formatFileSize(file.size) + ')';
+    preview.src = URL.createObjectURL(file);
+    preview.onload = function() { URL.revokeObjectURL(this.src); };
+    previewWrap.style.display = 'block';
+    submitBtn.disabled = false;
+}
+
+async function confirmarOCR() {
+    if (!pendingOCRFile) return;
+
+    const loading = document.getElementById('ocr-loading');
+    const errDiv = document.getElementById('ocr-error');
+    const submitBtn = document.getElementById('ocr-submit-btn');
+
+    errDiv.style.display = 'none';
+    errDiv.textContent = '';
+    loading.style.display = 'block';
+    submitBtn.disabled = true;
+
+    try {
+        const formData = new FormData();
+        formData.append('image', pendingOCRFile);
+
+        const response = await fetch('/api/ocr-image', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Error al extraer el texto');
+        }
+
+        if (!data.text || !data.text.trim()) {
+            throw new Error('No se detectó texto en la imagen');
+        }
+
+        const sourceId = Date.now().toString();
+        const name = 'Apuntes escaneados ' + new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        const source = {
+            id: sourceId,
+            name: name,
+            type: 'txt',
+            size: formatFileSize(data.text.length),
+            active: true,
+            file: null,
+            content: data.text.trim()
+        };
+
+        sources.push(source);
+        activeSources.push(sourceId);
+        renderSources();
+
+        agregarMensajeSistema('Apuntes escaneados añadidos. Ya puedes usar Resumir o Flashcards.');
+        cerrarOCRModal();
+    } catch (err) {
+        errDiv.textContent = err.message || 'Error al procesar la imagen';
+        errDiv.style.display = 'block';
+        submitBtn.disabled = true;
+    } finally {
+        loading.style.display = 'none';
+        if (pendingOCRFile) submitBtn.disabled = false;
+    }
+}
 
 // ========================================
 // CHAT

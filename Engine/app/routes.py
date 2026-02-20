@@ -12,6 +12,14 @@ import io
 
 from app.config import settings
 from app.services.ai_orchestrator import process_document_pipeline, chat_with_document
+from app.services.gemini_ocr import (
+    ocr_image_async,
+    OCRException,
+    OCRImageTooLarge,
+    OCRInvalidImage,
+    OCRLowQuality,
+    OCRBlockedOrEmpty,
+)
 
 # IMPORTS SIMPLIFICADOS (sin SQLAlchemy)
 from app.database import get_user_by_username, get_user_by_email, create_user, save_chat_message
@@ -32,6 +40,9 @@ MODOS_VALIDOS = ["general", "estudiar", "corto", "profesional"]
 
 # Cache temporal para estructura de documentos (en producción usar Redis)
 document_cache = {}
+
+# MIME types permitidos para OCR (debe coincidir con config.OCR_ALLOWED_MIME_TYPES)
+OCR_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -65,6 +76,65 @@ class ResumenRequest(BaseModel):
 async def app_page(request: Request):
     """Página principal de la aplicación"""
     return templates.TemplateResponse("index.html", {"request": request})
+
+
+@router.post("/api/ocr-image")
+@limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
+async def ocr_image_endpoint(request: Request, archivo: UploadFile = File(..., alias="image")):
+    """
+    OCR de apuntes manuscritos con Gemini 2.0 Flash Vision.
+    Acepta multipart/form-data con campo 'image'. Devuelve el texto extraído
+    para usarlo en Resumen/Flashcards.
+    """
+    if not archivo.filename:
+        return JSONResponse(status_code=400, content={"error": "No se envió ningún archivo"})
+
+    # Validar tipo por extensión y content-type
+    ext = (archivo.filename or "").lower().split(".")[-1]
+    mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "gif": "image/gif"}
+    mime_type = mime_map.get(ext) or (archivo.content_type or "").split(";")[0].strip().lower()
+    if mime_type not in OCR_ALLOWED_MIMES:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Formato no permitido. Usa JPG, PNG, WebP o GIF."},
+        )
+
+    try:
+        contenido = await archivo.read()
+    except Exception as e:
+        logger.exception("Error leyendo archivo OCR: %s", e)
+        return JSONResponse(status_code=400, content={"error": "Error al leer la imagen"})
+
+    if len(contenido) > settings.OCR_MAX_IMAGE_SIZE:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": f"Imagen demasiado grande. Máximo {settings.OCR_MAX_IMAGE_SIZE // (1024*1024)} MB."
+            },
+        )
+
+    if not settings.GEMINI_API_KEY:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "OCR no disponible. Configura GEMINI_API_KEY en el servidor."},
+        )
+
+    try:
+        text = await ocr_image_async(contenido, mime_type)
+        return JSONResponse(content={"text": text})
+    except OCRImageTooLarge as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except OCRInvalidImage as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    except OCRLowQuality as e:
+        return JSONResponse(status_code=422, content={"error": str(e)})
+    except OCRBlockedOrEmpty as e:
+        return JSONResponse(status_code=422, content={"error": str(e)})
+    except OCRException as e:
+        return JSONResponse(status_code=502, content={"error": str(e)})
+    except Exception as e:
+        logger.exception("OCR inesperado: %s", e)
+        return JSONResponse(status_code=500, content={"error": "Error al procesar la imagen"})
 
 
 @router.post("/resumir", response_class=HTMLResponse)

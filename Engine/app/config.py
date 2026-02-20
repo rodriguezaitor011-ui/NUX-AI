@@ -12,7 +12,15 @@ class Settings:
     
     # DeepSeek (chat + flashcards)
     DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
-    
+
+    # Google Gemini (OCR apuntes manuscritos - Vision)
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_OCR_MODEL: str = os.getenv("GEMINI_OCR_MODEL", "gemini-2.0-flash")
+    # Límite tamaño imagen para OCR (bytes). Por defecto 10 MB.
+    OCR_MAX_IMAGE_SIZE: int = int(os.getenv("OCR_MAX_IMAGE_SIZE", str(10 * 1024 * 1024)))
+    # Tipos MIME permitidos para OCR
+    OCR_ALLOWED_MIME_TYPES: tuple = ("image/jpeg", "image/png", "image/webp", "image/gif")
+
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///database/studia.db")
@@ -63,6 +71,15 @@ class Settings:
             raise ValueError(
                 "⚠️ ADVERTENCIA: CORS permite todos los orígenes en producción.\n"
                 "Configura CORS_ORIGINS en .env con dominios específicos separados por comas."
+            )
+
+    @classmethod
+    def validate_gemini_ocr(cls) -> None:
+        """Valida que Gemini esté configurado para usar la feature OCR de apuntes."""
+        if not cls.GEMINI_API_KEY:
+            raise ValueError(
+                "GEMINI_API_KEY no está configurada en tu archivo .env\n"
+                "Consigue tu key en: https://aistudio.google.com/apikey"
             )
 
 
