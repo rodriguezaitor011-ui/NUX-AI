@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5228198488593180"
      crossorigin="anonymous"></script>
@@ -9,7 +8,6 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
   gtag('config', 'G-7E3VD5X7M2');
 </script>
 <meta charset="UTF-8">
@@ -432,20 +430,16 @@ body {
     .stats-grid {
         grid-template-columns: 1fr;
     }
-    
     .charts-grid {
         grid-template-columns: 1fr;
     }
-    
     .search-box {
         flex-direction: column;
         width: 100%;
     }
-    
     .search-input {
         width: 100%;
     }
-    
     .users-table {
         font-size: 12px;
     }
@@ -455,7 +449,6 @@ body {
 <body>
 
 <div class="container">
-    <!-- Header -->
     <div class="admin-header">
         <div class="admin-title">
             <i data-lucide="shield-check" style="width:32px;height:32px;color:var(--primary);"></i>
@@ -467,7 +460,6 @@ body {
         </a>
     </div>
 
-    <!-- Stats Grid -->
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-header">
@@ -482,7 +474,6 @@ body {
                 <span>+<span id="users-week">0</span> esta semana</span>
             </div>
         </div>
-
         <div class="stat-card">
             <div class="stat-header">
                 <div class="stat-icon success">
@@ -496,7 +487,6 @@ body {
                 <span>+<span id="chats-today">0</span> hoy</span>
             </div>
         </div>
-
         <div class="stat-card">
             <div class="stat-header">
                 <div class="stat-icon warning">
@@ -510,22 +500,20 @@ body {
                 <span>Actividad general</span>
             </div>
         </div>
-
         <div class="stat-card">
             <div class="stat-header">
                 <div class="stat-icon primary">
                     <i data-lucide="crown" style="width:24px;height:24px;"></i>
                 </div>
             </div>
-            <div class="stat-value" style="font-size:20px;" id="most-active">-</div>
+            <div class="stat-value" style="font-size:20px;" id="most-active-user">-</div>
             <div class="stat-label">Usuario más activo</div>
             <div class="stat-change">
-                <span id="most-active-count">0 mensajes</span>
+                <span id="user-messages">0 mensajes</span>
             </div>
         </div>
     </div>
 
-    <!-- Charts -->
     <div class="charts-grid">
         <div class="chart-card">
             <div class="chart-header">
@@ -534,21 +522,17 @@ body {
             </div>
             <canvas id="activityChart"></canvas>
         </div>
-
         <div class="chart-card">
             <div class="chart-header">
                 <h3>Actividad reciente</h3>
                 <p>Últimas 10 interacciones</p>
             </div>
             <div class="activity-list" id="recent-activity">
-                <div class="loading">
-                    <div class="spinner"></div>
-                </div>
+                <div class="loading"><div class="spinner"></div></div>
             </div>
         </div>
     </div>
 
-    <!-- Users Table -->
     <div class="users-section">
         <div class="section-header">
             <h2>
@@ -559,7 +543,6 @@ body {
                 <input type="text" class="search-input" id="search-users" placeholder="Buscar usuarios...">
             </div>
         </div>
-
         <table class="users-table">
             <thead>
                 <tr>
@@ -575,20 +558,17 @@ body {
             <tbody id="users-tbody">
                 <tr>
                     <td colspan="7">
-                        <div class="loading">
-                            <div class="spinner"></div>
-                        </div>
+                        <div class="loading"><div class="spinner"></div></div>
                     </td>
                 </tr>
             </tbody>
         </table>
-
         <div class="pagination" id="pagination"></div>
     </div>
 </div>
 
 <script>
-// Auth
+// Auth: redirigir si no hay token
 const token = localStorage.getItem('auth_token');
 if (!token) {
     window.location.href = '/login';
@@ -597,17 +577,27 @@ if (!token) {
 let activityChart = null;
 let currentPage = 1;
 
-// Helper function para hacer peticiones autenticadas
-async function fetchWithAuth(url, options = {}) {
+async function adminFetch(url, options = {}) {
+    const t = localStorage.getItem('auth_token');
+    if (!t) {
+        window.location.href = '/login';
+        return null;
+    }
     const headers = {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${t}`,
         'Content-Type': 'application/json',
         ...options.headers
     };
-    return fetch(url, { ...options, headers });
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 401 || response.status === 403) {
+        alert('Acceso denegado. Solo administradores pueden ver este panel.');
+        window.location.href = '/app';
+        return null;
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
 }
 
-// Initialize
 async function init() {
     await Promise.all([
         loadStats(),
@@ -615,57 +605,40 @@ async function init() {
         loadRecentChats(),
         loadUsers(1)
     ]);
-    
     lucide.createIcons();
 }
 
-// Load Stats
 async function loadStats() {
     try {
-        const response = await fetchWithAuth(`/api/admin/stats`);
-        const data = await response.json();
-        
-        if (response.status === 403) {
-            alert('No tienes permisos de administrador');
-            window.location.href = '/app';
-            return;
-        }
-        
+        const data = await adminFetch('/api/admin/stats');
+        if (!data) return;
         document.getElementById('total-users').textContent = data.users.total;
         document.getElementById('users-week').textContent = data.users.week;
-        
         document.getElementById('total-chats').textContent = data.chats.total;
         document.getElementById('chats-today').textContent = data.chats.today;
-        
         document.getElementById('avg-messages').textContent = data.chats.average_per_user;
-        
-        document.getElementById('most-active').textContent = data.most_active_user.username;
-        document.getElementById('most-active-count').textContent = data.most_active_user.chat_count + ' mensajes';
-        
+        document.getElementById('most-active-user').textContent = data.most_active_user.username;
+        document.getElementById('user-messages').textContent = data.most_active_user.chat_count + ' mensajes';
     } catch (error) {
         console.error('Error loading stats:', error);
     }
 }
 
-// Load Activity Chart
 async function loadActivity() {
     try {
-        const response = await fetchWithAuth(`/api/admin/activity?days=7`);
-        const data = await response.json();
-        
+        const data = await adminFetch('/api/admin/activity?days=7');
+        if (!data) return;
+        const labels = data.activity.map(d => new Date(d.date).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }));
+        const values = data.activity.map(d => d.count);
         const ctx = document.getElementById('activityChart');
-        
-        if (activityChart) {
-            activityChart.destroy();
-        }
-        
+        if (activityChart) activityChart.destroy();
         activityChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: data.activity.map(d => new Date(d.date).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })),
+                labels: labels,
                 datasets: [{
                     label: 'Interacciones',
-                    data: data.activity.map(d => d.count),
+                    data: values,
                     borderColor: '#de4cf5',
                     backgroundColor: 'rgba(222, 76, 245, 0.1)',
                     tension: 0.4,
@@ -675,55 +648,30 @@ async function loadActivity() {
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
+                plugins: { legend: { display: false } },
                 scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: {
-                            color: 'rgba(222, 76, 245, 0.1)'
-                        },
-                        ticks: {
-                            color: '#9ca3af'
-                        }
-                    },
-                    x: {
-                        grid: {
-                            display: false
-                        },
-                        ticks: {
-                            color: '#9ca3af'
-                        }
-                    }
+                    y: { beginAtZero: true, grid: { color: 'rgba(222, 76, 245, 0.1)' }, ticks: { color: '#9ca3af' } },
+                    x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
                 }
             }
         });
-        
     } catch (error) {
         console.error('Error loading activity:', error);
     }
 }
 
-// Load Recent Chats
 async function loadRecentChats() {
     try {
-        const response = await fetchWithAuth(`/api/admin/recent-chats?limit=10`);
-        const data = await response.json();
-        
+        const data = await adminFetch('/api/admin/recent-chats?limit=10');
+        if (!data) return;
         const container = document.getElementById('recent-activity');
-        
-        if (data.chats.length === 0) {
+        if (!data.chats || data.chats.length === 0) {
             container.innerHTML = '<p style="text-align:center;color:var(--muted);">No hay actividad reciente</p>';
             return;
         }
-        
         container.innerHTML = data.chats.map(chat => {
             const date = new Date(chat.timestamp);
             const timeAgo = getTimeAgo(date);
-            
             return `
                 <div class="activity-item">
                     <div class="activity-content">
@@ -734,137 +682,85 @@ async function loadRecentChats() {
                 </div>
             `;
         }).join('');
-        
     } catch (error) {
         console.error('Error loading recent chats:', error);
     }
 }
 
-// Load Users
 async function loadUsers(page = 1) {
     try {
         const search = document.getElementById('search-users').value;
         const url = `/api/admin/users?page=${page}&limit=10${search ? '&search=' + encodeURIComponent(search) : ''}`;
-        
-        const response = await fetchWithAuth(url);
-        const data = await response.json();
-        
+        const data = await adminFetch(url);
+        if (!data) return;
         const tbody = document.getElementById('users-tbody');
-        
-        if (data.users.length === 0) {
+        if (!data.users || data.users.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted);">No se encontraron usuarios</td></tr>';
             return;
         }
-        
         tbody.innerHTML = data.users.map(user => {
-            const initial = user.username.charAt(0).toUpperCase();
+            const initial = (user.username || '').charAt(0).toUpperCase();
             const createdDate = new Date(user.created_at).toLocaleDateString('es-ES');
             const lastActivity = user.last_activity ? getTimeAgo(new Date(user.last_activity)) : 'Nunca';
-            
             return `
                 <tr>
                     <td>
                         <div class="user-info">
                             <div class="user-avatar">${initial}</div>
-                            <div class="user-details">
-                                <h4>${user.username}</h4>
-                            </div>
+                            <div class="user-details"><h4>${user.username}</h4></div>
                         </div>
                     </td>
                     <td>${user.email}</td>
-                    <td>
-                        <span class="badge ${user.is_admin ? 'admin' : 'user'}">
-                            ${user.is_admin ? 'Admin' : 'Usuario'}
-                        </span>
-                    </td>
+                    <td><span class="badge ${user.is_admin ? 'admin' : 'user'}">${user.is_admin ? 'Admin' : 'Usuario'}</span></td>
                     <td>${user.chat_count}</td>
                     <td>${createdDate}</td>
                     <td>${lastActivity}</td>
-                    <td>
-                        ${!user.is_admin ? `<button class="btn-delete" onclick="deleteUser(${user.id}, '${user.username}')">Eliminar</button>` : '-'}
-                    </td>
+                    <td>${!user.is_admin ? `<button class="btn-delete" onclick="deleteUser(${user.id}, '${(user.username || '').replace(/'/g, "\\'")}')">Eliminar</button>` : '-'}</td>
                 </tr>
             `;
         }).join('');
-        
-        // Pagination
         renderPagination(data.page, data.pages);
         currentPage = page;
-        
     } catch (error) {
         console.error('Error loading users:', error);
     }
 }
 
-// Pagination
 function renderPagination(page, totalPages) {
     const container = document.getElementById('pagination');
-    
     if (totalPages <= 1) {
         container.innerHTML = '';
         return;
     }
-    
-    let html = '';
-    
-    // Previous
-    html += `<button class="page-btn" onclick="loadUsers(${page - 1})" ${page === 1 ? 'disabled' : ''}>Anterior</button>`;
-    
-    // Pages
+    let html = `<button class="page-btn" onclick="loadUsers(${page - 1})" ${page === 1 ? 'disabled' : ''}>Anterior</button>`;
     for (let i = 1; i <= totalPages; i++) {
         if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
             html += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="loadUsers(${i})">${i}</button>`;
         } else if (i === page - 2 || i === page + 2) {
-            html += `<span style="padding:8px;">...</span>`;
+            html += '<span style="padding:8px;">...</span>';
         }
     }
-    
-    // Next
     html += `<button class="page-btn" onclick="loadUsers(${page + 1})" ${page === totalPages ? 'disabled' : ''}>Siguiente</button>`;
-    
     container.innerHTML = html;
 }
 
-// Delete User
 async function deleteUser(userId, username) {
-    if (!confirm(`¿Estás seguro de eliminar al usuario "${username}"? Esta acción no se puede deshacer.`)) {
-        return;
-    }
-    
+    if (!confirm('¿Estás seguro de eliminar al usuario "' + username + '"? Esta acción no se puede deshacer.')) return;
     try {
-        const response = await fetchWithAuth(`/api/admin/users/${userId}`, {
-            method: 'DELETE'
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            alert(data.message);
+        const data = await adminFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+        if (data && data.error) alert('Error: ' + data.error);
+        else {
             await loadUsers(currentPage);
             await loadStats();
-        } else {
-            alert('Error: ' + data.error);
         }
-        
     } catch (error) {
         console.error('Error deleting user:', error);
         alert('Error al eliminar usuario');
     }
 }
 
-// Search
-let searchTimeout;
-document.getElementById('search-users').addEventListener('input', () => {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-        loadUsers(1);
-    }, 500);
-});
-
-// Utilities
 function getTimeAgo(date) {
     const seconds = Math.floor((new Date() - date) / 1000);
-    
     if (seconds < 60) return 'Ahora';
     if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
     if (seconds < 86400) return Math.floor(seconds / 3600) + 'h';
@@ -872,14 +768,14 @@ function getTimeAgo(date) {
     return date.toLocaleDateString('es-ES');
 }
 
-// Init
-init();
+let searchTimeout;
+document.getElementById('search-users').addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => loadUsers(1), 500);
+});
 
-// Refresh every 30s
-setInterval(() => {
-    loadStats();
-    loadRecentChats();
-}, 30000);
+init();
+setInterval(() => { loadStats(); loadRecentChats(); }, 30000);
 </script>
 
 </body>
