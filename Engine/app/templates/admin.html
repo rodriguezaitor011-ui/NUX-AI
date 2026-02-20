@@ -1,570 +1,166 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5228198488593180"
-<<<<<<< HEAD
-     crossorigin="anonymous"></script>
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-7E3VD5X7M2"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-7E3VD5X7M2');
-</script>
-=======
-     crossorigin="anonymous"></script>  
->>>>>>> 8970e442fbf323b24f3a10368de37b951e0f2808
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel Admin - NUX IA</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://unpkg.com/lucide@latest"></script>
-<style>
-:root {
-    --primary: #de4cf5;
-    --bg: #0a0a0f;
-    --panel-bg: rgba(20, 20, 30, 0.8);
-    --border: rgba(222, 76, 245, 0.2);
-    --text: #ffffff;
-    --muted: #9ca3af;
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-}
-
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: linear-gradient(180deg, #0a0a0f 0%, #1a0a1f 100%);
-    color: var(--text);
-    min-height: 100vh;
-    padding: 20px;
-}
-
-.container {
-    max-width: 1400px;
-    margin: 0 auto;
-}
-
-/* Header */
-.admin-header {
-    background: var(--panel-bg);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-    margin-bottom: 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.admin-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.admin-title h1 {
-    font-size: 28px;
-    font-weight: 700;
-    background: linear-gradient(135deg, #fff 0%, var(--primary) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.btn-back {
-    padding: 10px 20px;
-    background: rgba(222, 76, 245, 0.15);
-    border: 1px solid var(--primary);
-    border-radius: 10px;
-    color: var(--primary);
-    text-decoration: none;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.btn-back:hover {
-    background: rgba(222, 76, 245, 0.25);
-    transform: translateX(-2px);
-}
-
-/* Stats Grid */
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    margin-bottom: 24px;
-}
-
-.stat-card {
-    background: var(--panel-bg);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-    transition: all 0.2s ease;
-}
-
-.stat-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--primary);
-}
-
-.stat-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-}
-
-.stat-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.stat-icon.primary {
-    background: linear-gradient(135deg, rgba(222, 76, 245, 0.2), rgba(222, 76, 245, 0.05));
-    color: var(--primary);
-}
-
-.stat-icon.success {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.05));
-    color: var(--success);
-}
-
-.stat-icon.warning {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.05));
-    color: var(--warning);
-}
-
-.stat-value {
-    font-size: 36px;
-    font-weight: 700;
-    margin-bottom: 8px;
-}
-
-.stat-label {
-    color: var(--muted);
-    font-size: 14px;
-    margin-bottom: 12px;
-}
-
-.stat-change {
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.stat-change.positive {
-    color: var(--success);
-}
-
-.stat-change.negative {
-    color: var(--danger);
-}
-
-/* Charts Section */
-.charts-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 20px;
-    margin-bottom: 24px;
-}
-
-.chart-card {
-    background: var(--panel-bg);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-}
-
-.chart-header {
-    margin-bottom: 20px;
-}
-
-.chart-header h3 {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-.chart-header p {
-    color: var(--muted);
-    font-size: 13px;
-}
-
-/* Users Table */
-.users-section {
-    background: var(--panel-bg);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-    margin-bottom: 24px;
-}
-
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.section-header h2 {
-    font-size: 20px;
-    font-weight: 600;
-}
-
-.search-box {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-}
-
-.search-input {
-    padding: 10px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text);
-    font-size: 14px;
-    width: 300px;
-}
-
-.search-input:focus {
-    outline: none;
-    border-color: var(--primary);
-}
-
-.users-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.users-table th {
-    text-align: left;
-    padding: 12px;
-    border-bottom: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.users-table td {
-    padding: 16px 12px;
-    border-bottom: 1px solid rgba(222, 76, 245, 0.1);
-}
-
-.users-table tr:hover {
-    background: rgba(222, 76, 245, 0.05);
-}
-
-.user-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.user-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--primary), rgba(222, 76, 245, 0.5));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 16px;
-}
-
-.user-details h4 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 2px;
-}
-
-.user-details p {
-    font-size: 12px;
-    color: var(--muted);
-}
-
-.badge {
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-
-.badge.admin {
-    background: rgba(222, 76, 245, 0.2);
-    color: var(--primary);
-}
-
-.badge.user {
-    background: rgba(156, 163, 175, 0.2);
-    color: var(--muted);
-}
-
-.btn-delete {
-    padding: 8px 16px;
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid var(--danger);
-    border-radius: 8px;
-    color: var(--danger);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-delete:hover {
-    background: rgba(239, 68, 68, 0.25);
-}
-
-/* Recent Activity */
-.activity-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.activity-item {
-    padding: 16px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-}
-
-.activity-content h4 {
-    font-size: 14px;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-.activity-content p {
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.5;
-}
-
-.activity-time {
-    font-size: 11px;
-    color: var(--muted);
-    white-space: nowrap;
-}
-
-/* Loading */
-.loading {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 40px;
-}
-
-.spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(222, 76, 245, 0.2);
-    border-top-color: var(--primary);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
-/* Pagination */
-.pagination {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 20px;
-}
-
-.page-btn {
-    padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.page-btn:hover {
-    background: rgba(222, 76, 245, 0.15);
-    border-color: var(--primary);
-}
-
-.page-btn.active {
-    background: var(--primary);
-    border-color: var(--primary);
-}
-
-.page-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admin - NUX IA</title>
     
-    .charts-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .search-box {
-        flex-direction: column;
-        width: 100%;
-    }
-    
-    .search-input {
-        width: 100%;
-    }
-    
-    .users-table {
-        font-size: 12px;
-    }
-}
-</style>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5228198488593180" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        :root {
+            --primary: #de4cf5;
+            --bg: #0a0a0f;
+            --panel-bg: rgba(20, 20, 30, 0.8);
+            --border: rgba(222, 76, 245, 0.2);
+            --text: #ffffff;
+            --muted: #9ca3af;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(180deg, #0a0a0f 0%, #1a0a1f 100%);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        /* Reutilizando tus estilos anteriores optimizados */
+        .admin-header {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .stat-value { font-size: 32px; font-weight: 700; margin: 10px 0; }
+        .stat-label { color: var(--muted); font-size: 14px; }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 1024px) { .charts-grid { grid-template-columns: 1fr; } }
+
+        .card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            overflow-x: auto;
+        }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { text-align: left; color: var(--muted); padding: 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+        td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
+
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; }
+        .badge-admin { background: rgba(222, 76, 245, 0.2); color: var(--primary); }
+        .badge-user { background: rgba(156, 163, 175, 0.2); color: var(--muted); }
+        
+        .search-input {
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: white;
+            width: 250px;
+        }
+    </style>
 </head>
 <body>
 
 <div class="container">
-    <!-- Header -->
     <div class="admin-header">
-        <div class="admin-title">
-            <i data-lucide="shield-check" style="width:32px;height:32px;color:var(--primary);"></i>
-            <h1>Panel de Administración</h1>
+        <div style="display:flex; align-items:center; gap:12px;">
+            <i data-lucide="shield-check" color="#de4cf5"></i>
+            <h1 style="font-size:24px;">Panel NUX IA</h1>
         </div>
-        <a href="/app" class="btn-back">
-            <i data-lucide="arrow-left" style="width:16px;height:16px;"></i>
-            Volver a la app
-        </a>
+        <a href="/app" style="color:var(--primary); text-decoration:none;">← Volver</a>
     </div>
 
-    <!-- Stats Grid -->
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-header">
-                <div class="stat-icon primary">
-                    <i data-lucide="users" style="width:24px;height:24px;"></i>
-                </div>
-            </div>
+            <div class="stat-label">Usuarios Totales</div>
             <div class="stat-value" id="total-users">-</div>
-            <div class="stat-label">Total de usuarios</div>
-            <div class="stat-change positive" id="users-change">
-                <i data-lucide="trending-up" style="width:14px;height:14px;"></i>
-                <span>+<span id="users-week">0</span> esta semana</span>
-            </div>
+            <div id="users-week" style="color:var(--success); font-size:12px;">-</div>
         </div>
-
         <div class="stat-card">
-            <div class="stat-header">
-                <div class="stat-icon success">
-                    <i data-lucide="message-circle" style="width:24px;height:24px;"></i>
-                </div>
-            </div>
+            <div class="stat-label">Interacciones</div>
             <div class="stat-value" id="total-chats">-</div>
-            <div class="stat-label">Total de interacciones</div>
-            <div class="stat-change positive" id="chats-change">
-                <i data-lucide="trending-up" style="width:14px;height:14px;"></i>
-                <span>+<span id="chats-today">0</span> hoy</span>
-            </div>
+            <div id="chats-today" style="color:var(--success); font-size:12px;">-</div>
         </div>
-
         <div class="stat-card">
-            <div class="stat-header">
-                <div class="stat-icon warning">
-                    <i data-lucide="bar-chart-3" style="width:24px;height:24px;"></i>
-                </div>
-            </div>
+            <div class="stat-label">Promedio Msg/User</div>
             <div class="stat-value" id="avg-messages">-</div>
-            <div class="stat-label">Promedio mensajes/usuario</div>
-            <div class="stat-change">
-                <i data-lucide="activity" style="width:14px;height:14px;"></i>
-                <span>Actividad general</span>
-            </div>
+            <div id="general-activity" style="color:var(--muted); font-size:12px;">Actividad general</div>
         </div>
-
         <div class="stat-card">
-            <div class="stat-header">
-                <div class="stat-icon primary">
-                    <i data-lucide="crown" style="width:24px;height:24px;"></i>
-                </div>
-            </div>
-            <div class="stat-value" style="font-size:20px;" id="most-active">-</div>
             <div class="stat-label">Usuario más activo</div>
-            <div class="stat-change">
-                <span id="most-active-count">0 mensajes</span>
-            </div>
+            <div class="stat-value" id="most-active-user" style="font-size:20px;">-</div>
+            <div id="user-messages" style="color:var(--primary); font-size:12px;">-</div>
         </div>
     </div>
 
-    <!-- Charts -->
     <div class="charts-grid">
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3>Actividad últimos 7 días</h3>
-                <p>Interacciones diarias</p>
+        <div class="card">
+            <h3>Actividad (7 días)</h3>
+            <div style="height: 300px;">
+                <canvas id="activityChart"></canvas>
             </div>
-            <canvas id="activityChart"></canvas>
         </div>
 
-        <div class="chart-card">
-            <div class="chart-header">
-                <h3>Actividad reciente</h3>
-                <p>Últimas 10 interacciones</p>
-            </div>
-            <div class="activity-list" id="recent-activity">
-                <div class="loading">
-                    <div class="spinner"></div>
-                </div>
-            </div>
+        <div class="card" id="recent-chats-table">
+            <h3>Últimos Chats</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Mensaje</th>
+                        <th>Respuesta</th>
+                        <th>Hora</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 
-    <!-- Users Table -->
-    <div class="users-section">
-        <div class="section-header">
-            <h2>
-                <i data-lucide="users" style="width:20px;height:20px;vertical-align:middle;margin-right:8px;"></i>
-                Gestión de Usuarios
-            </h2>
-            <div class="search-box">
-                <input type="text" class="search-input" id="search-users" placeholder="Buscar usuarios...">
-            </div>
+    <div class="card" id="users-table">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>Gestión de Usuarios</h3>
+            <input type="text" id="user-search" class="search-input" placeholder="Buscar por nombre o email...">
         </div>
-
-        <table class="users-table">
+        <table>
             <thead>
                 <tr>
                     <th>Usuario</th>
@@ -572,308 +168,145 @@ body {
                     <th>Rol</th>
                     <th>Mensajes</th>
                     <th>Registro</th>
-                    <th>Última actividad</th>
-                    <th>Acciones</th>
+                    <th>Última Act.</th>
                 </tr>
             </thead>
-            <tbody id="users-tbody">
-                <tr>
-                    <td colspan="7">
-                        <div class="loading">
-                            <div class="spinner"></div>
-                        </div>
-                    </td>
-                </tr>
-            </tbody>
+            <tbody></tbody>
         </table>
-
-        <div class="pagination" id="pagination"></div>
+        <div id="pagination" style="display:flex; justify-content:center; gap:10px; margin-top:20px;"></div>
     </div>
 </div>
 
 <script>
-// Auth
-const token = localStorage.getItem('auth_token');
-if (!token) {
-    window.location.href = '/login';
-}
+// --- NUEVAS FUNCIONES IMPLEMENTADAS ---
 
-let activityChart = null;
-let currentPage = 1;
-
-// Initialize
-async function init() {
-    await Promise.all([
-        loadStats(),
-        loadActivity(),
-        loadRecentChats(),
-        loadUsers(1)
-    ]);
+async function adminFetch(url, options = {}) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+        window.location.href = '/login';
+        return null;
+    }
+    const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    const response = await fetch(url, { ...options, headers });
     
-    lucide.createIcons();
+    if (response.status === 401 || response.status === 403) {
+        alert('Acceso denegado. Solo administradores pueden ver este panel.');
+        window.location.href = '/app';
+        return null;
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
 }
 
-// Load Stats
 async function loadStats() {
     try {
-        const response = await fetch(`/api/admin/stats?token=${token}`);
-        const data = await response.json();
-        
-        if (response.status === 403) {
-            alert('No tienes permisos de administrador');
-            window.location.href = '/app';
-            return;
-        }
-        
+        const data = await adminFetch('/api/admin/stats');
+        if (!data) return;
         document.getElementById('total-users').textContent = data.users.total;
-        document.getElementById('users-week').textContent = data.users.week;
-        
+        document.getElementById('users-week').textContent = `+${data.users.week} esta semana`;
         document.getElementById('total-chats').textContent = data.chats.total;
-        document.getElementById('chats-today').textContent = data.chats.today;
-        
+        document.getElementById('chats-today').textContent = `+${data.chats.today} hoy`;
         document.getElementById('avg-messages').textContent = data.chats.average_per_user;
-        
-        document.getElementById('most-active').textContent = data.most_active_user.username;
-        document.getElementById('most-active-count').textContent = data.most_active_user.chat_count + ' mensajes';
-        
-    } catch (error) {
-        console.error('Error loading stats:', error);
-    }
+        document.getElementById('most-active-user').textContent = data.most_active_user.username;
+        document.getElementById('user-messages').textContent = `${data.most_active_user.chat_count} mensajes`;
+    } catch (error) { console.error('Error stats:', error); }
 }
 
-// Load Activity Chart
 async function loadActivity() {
     try {
-        const response = await fetch(`/api/admin/activity?token=${token}&days=7`);
-        const data = await response.json();
-        
-        const ctx = document.getElementById('activityChart');
-        
-        if (activityChart) {
-            activityChart.destroy();
-        }
-        
-        activityChart = new Chart(ctx, {
+        const data = await adminFetch('/api/admin/activity?days=7');
+        if (!data) return;
+        const labels = data.activity.map(d => new Date(d.date).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' }));
+        const values = data.activity.map(d => d.count);
+        const ctx = document.getElementById('activityChart').getContext('2d');
+        if (window.activityChart) window.activityChart.destroy();
+        window.activityChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: data.activity.map(d => new Date(d.date).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })),
+                labels: labels,
                 datasets: [{
                     label: 'Interacciones',
-                    data: data.activity.map(d => d.count),
+                    data: values,
                     borderColor: '#de4cf5',
                     backgroundColor: 'rgba(222, 76, 245, 0.1)',
                     tension: 0.4,
                     fill: true
                 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: {
-                            color: 'rgba(222, 76, 245, 0.1)'
-                        },
-                        ticks: {
-                            color: '#9ca3af'
-                        }
-                    },
-                    x: {
-                        grid: {
-                            display: false
-                        },
-                        ticks: {
-                            color: '#9ca3af'
-                        }
-                    }
-                }
-            }
+            options: { responsive: true, maintainAspectRatio: false }
         });
-        
-    } catch (error) {
-        console.error('Error loading activity:', error);
-    }
+    } catch (error) { console.error('Error activity:', error); }
 }
 
-// Load Recent Chats
 async function loadRecentChats() {
     try {
-        const response = await fetch(`/api/admin/recent-chats?token=${token}&limit=10`);
-        const data = await response.json();
-        
-        const container = document.getElementById('recent-activity');
-        
-        if (data.chats.length === 0) {
-            container.innerHTML = '<p style="text-align:center;color:var(--muted);">No hay actividad reciente</p>';
-            return;
-        }
-        
-        container.innerHTML = data.chats.map(chat => {
-            const date = new Date(chat.timestamp);
-            const timeAgo = getTimeAgo(date);
-            
-            return `
-                <div class="activity-item">
-                    <div class="activity-content">
-                        <h4>${chat.username}</h4>
-                        <p>${chat.message}</p>
-                    </div>
-                    <div class="activity-time">${timeAgo}</div>
-                </div>
-            `;
-        }).join('');
-        
-    } catch (error) {
-        console.error('Error loading recent chats:', error);
-    }
-}
-
-// Load Users
-async function loadUsers(page = 1) {
-    try {
-        const search = document.getElementById('search-users').value;
-        const url = `/api/admin/users?token=${token}&page=${page}&limit=10${search ? '&search=' + search : ''}`;
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        const tbody = document.getElementById('users-tbody');
-        
-        if (data.users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted);">No se encontraron usuarios</td></tr>';
-            return;
-        }
-        
-        tbody.innerHTML = data.users.map(user => {
-            const initial = user.username.charAt(0).toUpperCase();
-            const createdDate = new Date(user.created_at).toLocaleDateString('es-ES');
-            const lastActivity = user.last_activity ? getTimeAgo(new Date(user.last_activity)) : 'Nunca';
-            
-            return `
-                <tr>
-                    <td>
-                        <div class="user-info">
-                            <div class="user-avatar">${initial}</div>
-                            <div class="user-details">
-                                <h4>${user.username}</h4>
-                            </div>
-                        </div>
-                    </td>
-                    <td>${user.email}</td>
-                    <td>
-                        <span class="badge ${user.is_admin ? 'admin' : 'user'}">
-                            ${user.is_admin ? 'Admin' : 'Usuario'}
-                        </span>
-                    </td>
-                    <td>${user.chat_count}</td>
-                    <td>${createdDate}</td>
-                    <td>${lastActivity}</td>
-                    <td>
-                        ${!user.is_admin ? `<button class="btn-delete" onclick="deleteUser(${user.id}, '${user.username}')">Eliminar</button>` : '-'}
-                    </td>
-                </tr>
-            `;
-        }).join('');
-        
-        // Pagination
-        renderPagination(data.page, data.pages);
-        currentPage = page;
-        
-    } catch (error) {
-        console.error('Error loading users:', error);
-    }
-}
-
-// Pagination
-function renderPagination(page, totalPages) {
-    const container = document.getElementById('pagination');
-    
-    if (totalPages <= 1) {
-        container.innerHTML = '';
-        return;
-    }
-    
-    let html = '';
-    
-    // Previous
-    html += `<button class="page-btn" onclick="loadUsers(${page - 1})" ${page === 1 ? 'disabled' : ''}>Anterior</button>`;
-    
-    // Pages
-    for (let i = 1; i <= totalPages; i++) {
-        if (i === 1 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
-            html += `<button class="page-btn ${i === page ? 'active' : ''}" onclick="loadUsers(${i})">${i}</button>`;
-        } else if (i === page - 2 || i === page + 2) {
-            html += `<span style="padding:8px;">...</span>`;
-        }
-    }
-    
-    // Next
-    html += `<button class="page-btn" onclick="loadUsers(${page + 1})" ${page === totalPages ? 'disabled' : ''}>Siguiente</button>`;
-    
-    container.innerHTML = html;
-}
-
-// Delete User
-async function deleteUser(userId, username) {
-    if (!confirm(`¿Estás seguro de eliminar al usuario "${username}"? Esta acción no se puede deshacer.`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/admin/users/${userId}?token=${token}`, {
-            method: 'DELETE'
+        const data = await adminFetch('/api/admin/recent-chats?limit=10');
+        if (!data) return;
+        const tbody = document.querySelector('#recent-chats-table tbody');
+        tbody.innerHTML = data.chats.length ? '' : '<tr><td colspan="4">No hay chats</td></tr>';
+        data.chats.forEach(chat => {
+            const row = document.createElement('tr');
+            const timeStr = new Date(chat.timestamp).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+            row.innerHTML = `<td><strong>${chat.username}</strong></td><td>${chat.message}</td><td>${chat.response || '-'}</td><td>${timeStr}</td>`;
+            tbody.appendChild(row);
         });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            alert(data.message);
-            await loadUsers(currentPage);
-            await loadStats();
-        } else {
-            alert('Error: ' + data.error);
-        }
-        
-    } catch (error) {
-        console.error('Error deleting user:', error);
-        alert('Error al eliminar usuario');
+    } catch (error) { console.error('Error chats:', error); }
+}
+
+async function loadUsers(page = 1, search = '') {
+    try {
+        let url = `/api/admin/users?page=${page}&limit=10${search ? `&search=${encodeURIComponent(search)}` : ''}`;
+        const data = await adminFetch(url);
+        if (!data) return;
+        const tbody = document.querySelector('#users-table tbody');
+        tbody.innerHTML = '';
+        data.users.forEach(user => {
+            const row = document.createElement('tr');
+            const roleBadge = user.is_admin ? '<span class="badge badge-admin">Admin</span>' : '<span class="badge badge-user">Usuario</span>';
+            row.innerHTML = `
+                <td><strong>${user.username}</strong></td>
+                <td>${user.email}</td>
+                <td>${roleBadge}</td>
+                <td>${user.chat_count}</td>
+                <td>${new Date(user.created_at).toLocaleDateString('es-ES')}</td>
+                <td>${user.last_activity ? new Date(user.last_activity).toLocaleDateString('es-ES') : 'Nunca'}</td>
+            `;
+            tbody.appendChild(row);
+        });
+        updatePagination(data.page, data.pages);
+    } catch (error) { console.error('Error users:', error); }
+}
+
+function updatePagination(current, total) {
+    const nav = document.getElementById('pagination');
+    nav.innerHTML = '';
+    for(let i=1; i<=total; i++) {
+        const btn = document.createElement('button');
+        btn.innerText = i;
+        btn.style.cssText = `padding: 5px 10px; cursor: pointer; background: ${i === current ? 'var(--primary)' : 'transparent'}; color: white; border: 1px solid var(--primary); border-radius: 4px;`;
+        btn.onclick = () => loadUsers(i, document.getElementById('user-search').value);
+        nav.appendChild(btn);
     }
 }
 
-// Search
-let searchTimeout;
-document.getElementById('search-users').addEventListener('input', () => {
-    clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-        loadUsers(1);
-    }, 500);
+// Búsqueda en tiempo real
+document.getElementById('user-search').addEventListener('input', (e) => {
+    loadUsers(1, e.target.value);
 });
 
-// Utilities
-function getTimeAgo(date) {
-    const seconds = Math.floor((new Date() - date) / 1000);
-    
-    if (seconds < 60) return 'Ahora';
-    if (seconds < 3600) return Math.floor(seconds / 60) + 'm';
-    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h';
-    if (seconds < 604800) return Math.floor(seconds / 86400) + 'd';
-    return date.toLocaleDateString('es-ES');
+async function init() {
+    const token = localStorage.getItem('auth_token');
+    if (!token) { window.location.href = '/login'; return; }
+    await Promise.all([loadStats(), loadActivity(), loadRecentChats(), loadUsers()]);
+    lucide.createIcons();
+    setInterval(() => { loadStats(); loadRecentChats(); }, 30000);
 }
 
-// Init
-init();
-
-// Refresh every 30s
-setInterval(() => {
-    loadStats();
-    loadRecentChats();
-}, 30000);
+document.addEventListener('DOMContentLoaded', init);
 </script>
 
 </body>
