@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5228198488593180"
+     crossorigin="anonymous"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-7E3VD5X7M2"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-7E3VD5X7M2');
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#de4cf5">
+<title>NUX IA - Dashboard v2.0</title>
+<link rel="stylesheet" href="/static/css/glassmorphism.css">
+<link rel="stylesheet" href="/static/css/flashcards.css">
+<!-- Marked.js -->
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5228198488593180"
+     crossorigin="anonymous"></script>
+<body class="dark">
+
+<!-- Auth check -->
+<script>
+const token = localStorage.getItem('auth_token');
+const username = localStorage.getItem('user_username');
+if (!token || !username) {
+    window.location.href = '/login';
+}
+</script>
+
+<!-- Header -->
+<header class="main-header">
+    <div class="header-left">
+        <div class="logo">
+            <i data-lucide="brain"></i> NUX AI
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="user-badge" id="user-badge">Cargando...</div>
+        
+        <!-- Botón Pomodoro -->
+        <button class="btn-pomodoro" onclick="togglePomodoro()" title="Pomodoro Timer" style="
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), rgba(222, 76, 245, 0.8));
+            border: none;
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(222, 76, 245, 0.3);
+            transition: all 0.2s ease;
+        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(222, 76, 245, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(222, 76, 245, 0.3)'">
+            <i data-lucide="clock" style="width:18px;height:18px;"></i>
+        </button>
+        
+        <button class="btn-logout" onclick="logout()" title="Cerrar sesión">
+            <i data-lucide="log-out"></i>
+        </button>
+        <div class="toggle" onclick="toggleDark()">
+            <i data-lucide="sun-moon"></i>
+        </div>
+    </div>
+</header>
+
+<!-- Main Container -->
+<div class="main-container">
+    
+    <!-- CÁPSULA IZQUIERDA: Fuentes -->
+    <div class="capsule capsule-left" id="capsule-sources">
+        <!-- Status Indicator -->
+        <div class="status-indicator" id="status-left"></div>
+        
+        <!-- Collapsed State -->
+        <div class="capsule-collapsed">
+            <div class="capsule-icon" onclick="toggleCapsule('sources')" title="Fuentes">
+                <i data-lucide="folder-open"></i>
+            </div>
+            <div class="capsule-icon" onclick="mostrarPasteModal()" title="Pegar texto">
+                <i data-lucide="clipboard-paste"></i>
+            </div>
+            <div class="capsule-icon" onclick="document.getElementById('archivo').click()" title="Subir archivo">
+                <i data-lucide="upload"></i>
+            </div>
+        </div>
+        
+        <!-- Expanded State -->
+        <div class="capsule-expanded">
+            <div class="capsule-header">
+                <h2 class="capsule-title">
+                    <i data-lucide="folder-open" style="width:20px;height:20px;display:inline-block;"></i>
+                    Fuentes
+                </h2>
+                <button class="capsule-close" onclick="toggleCapsule('sources')">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <button class="add-source-btn" onclick="document.getElementById('archivo').click()">
+                <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+                Añadir documento
+            </button>
+            
+            <div class="sources-content">
+                <div class="sources-list" id="sources-list">
+                    <div class="empty-state" id="empty-sources">
+                        <div class="empty-icon">
+                            <i data-lucide="file-plus" style="width:48px;height:48px;opacity:0.3;"></i>
+                        </div>
+                        <p><strong>Sin documentos</strong></p>
+                        <small>Sube PDFs o pega texto para empezar</small>
+                    </div>
+                </div>
+            </div>
+            
+            <input type="file" id="archivo" accept=".txt,.pdf" style="display:none" onchange="addSource(this)">
+        </div>
+    </div>
+    
+    <!-- CÁPSULA DERECHA: Herramientas -->
+    <div class="capsule capsule-right" id="capsule-tools">
+        <!-- Status Indicator -->
+        <div class="status-indicator" id="status-right"></div>
+        
+        <!-- Collapsed State -->
+        <div class="capsule-collapsed">
+            <div class="capsule-icon" onclick="toggleCapsule('tools')" title="Herramientas">
+                <i data-lucide="sparkles"></i>
+            </div>
+            <div class="capsule-icon" onclick="ejecutarHerramienta('resumir')" title="Resumir">
+                <i data-lucide="file-text"></i>
+            </div>
+            <div class="capsule-icon" onclick="ejecutarHerramienta('flashcards')" title="Flashcards">
+                <i data-lucide="layers"></i>
+            </div>
+        </div>
+        
+        <!-- Expanded State -->
+        <div class="capsule-expanded">
+            <div class="capsule-header">
+                <h2 class="capsule-title">
+                    <i data-lucide="sparkles" style="width:20px;height:20px;display:inline-block;"></i>
+                    Herramientas
+                </h2>
+                <button class="capsule-close" onclick="toggleCapsule('tools')">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <div class="tools-content">
+                <div class="tools-grid">
+                    <div class="tool-chip" onclick="ejecutarHerramienta('resumir')">
+                        <div class="tool-chip-icon">
+                            <i data-lucide="file-text" style="width:24px;height:24px;"></i>
+                        </div>
+                        <div class="tool-chip-content">
+                            <h3 class="tool-chip-title">Resumir</h3>
+                            <p class="tool-chip-desc">Resumen ejecutivo</p>
+                        </div>
+                        <div class="tool-chip-badge">Llama 3.3</div>
+                    </div>
+                    
+                    <div class="tool-chip" onclick="ejecutarHerramienta('flashcards')">
+                        <div class="tool-chip-icon">
+                            <i data-lucide="layers" style="width:24px;height:24px;"></i>
+                        </div>
+                        <div class="tool-chip-content">
+                            <h3 class="tool-chip-title">Flashcards</h3>
+                            <p class="tool-chip-desc">Tarjetas de estudio</p>
+                        </div>
+                        <div class="tool-chip-badge">DeepSeek</div>
+                    </div>
+                    
+                    <div class="tool-chip" onclick="ejecutarHerramienta('analizar')">
+                        <div class="tool-chip-icon">
+                            <i data-lucide="bar-chart-3" style="width:24px;height:24px;"></i>
+                        </div>
+                        <div class="tool-chip-content">
+                            <h3 class="tool-chip-title">Analizar</h3>
+                            <p class="tool-chip-desc">Estructura y conceptos</p>
+                        </div>
+                        <div class="tool-chip-badge">Scout</div>
+                    </div>
+                </div>
+                
+                <div class="tool-chip" onclick="ejecutarHerramientaMindmap()">
+                     <div class="tool-chip-icon">
+                         <i data-lucide="git-branch" style="width:24px;height:24px;"></i>
+                     </div>
+                     <div class="tool-chip-content">
+                         <h3 class="tool-chip-title">Mapa Mental</h3>
+                         <p class="tool-chip-desc">Visualización conceptual</p>
+                    </div>
+    <div class="tool-chip-badge">DeepSeek</div>
+</div>
+                <div class="section-divider"></div>
+                
+                <div class="output-section" id="tool-outputs" style="display:none;">
+                    <h4>
+                        <i data-lucide="folder" style="width:14px;height:14px;display:inline-block;"></i>
+                        Contenidos creados
+                    </h4>
+                    <div class="output-list" id="output-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CHAT CENTRAL -->
+    <div class="chat-container">
+        <main class="chat-panel">
+            <div class="chat-header">
+                <div>
+                    <h2>
+                        <i data-lucide="message-circle" style="width:24px;height:24px;display:inline-block;vertical-align:middle;margin-right:8px;"></i>
+                        Chat con NUX AI
+                    </h2>
+                    <p class="chat-subtitle" id="chat-subtitle">Powered by DeepSeek v3</p>
+                </div>
+                <div class="chat-actions">
+                    <div class="chat-mode-toggle">
+                        <label class="toggle-option">
+                            <input type="radio" name="chat-mode" value="sources" checked onchange="cambiarModoChat('sources')">
+                            <span>
+                                <i data-lucide="book-open" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i>
+                                Solo fuentes
+                            </span>
+                        </label>
+                        <label class="toggle-option">
+                            <input type="radio" name="chat-mode" value="general" onchange="cambiarModoChat('general')">
+                            <span>
+                                <i data-lucide="globe" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"></i>
+                                Con internet
+                            </span>
+                        </label>
+                    </div>
+                    <button class="btn-secondary" onclick="limpiarChat()">
+                        <i data-lucide="refresh-ccw" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;"></i>
+                        Nueva conversación
+                    </button>
+                </div>
+            </div>
+            
+            <div class="chat-messages" id="chat-messages">
+                <div class="welcome-message">
+                    <div class="welcome-icon">
+                        <i data-lucide="hand" style="width:64px;height:64px;"></i>
+                    </div>
+                    <h3>¡Hola! Soy tu asistente de estudio</h3>
+                    <p>Haz clic en las cápsulas laterales para añadir documentos o usar herramientas.</p>
+                </div>
+            </div>
+            
+            <div class="chat-input-area">
+                <div class="processing-indicator" id="processing-indicator" style="display:none;">
+                    <div class="spinner"></div>
+                    <span id="processing-text">Procesando...</span>
+                </div>
+                
+                <div class="chat-input-wrapper">
+                    <textarea 
+                        id="chat-input" 
+                        placeholder="Pregunta sobre tus documentos..."
+                        rows="1"
+                        onkeypress="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); enviarMensaje(); }"
+                    ></textarea>
+                    <button class="btn-send" onclick="enviarMensaje()" id="send-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+</div>
+
+<!-- MODALES -->
+
+<!-- Modal: Renombrar archivo -->
+<div class="modal-overlay" id="rename-modal">
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <h3>
+                <i data-lucide="edit-3" style="width:18px;height:18px;display:inline-block;vertical-align:middle;margin-right:8px;"></i>
+                Nombra tu documento
+            </h3>
+            <button class="modal-close" onclick="cerrarRenameModal()">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p style="color: var(--muted); margin-bottom: 16px;">Dale un nombre descriptivo para identificarlo fácilmente</p>
+            <div class="input-group">
+                <label>Nombre del documento</label>
+                <input type="text" id="rename-input" class="modal-input" placeholder="Ej: Tema 12 - Fotosíntesis">
+            </div>
+            <div class="file-info" id="original-filename"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary-modal" onclick="cerrarRenameModal()">Cancelar</button>
+            <button class="btn-primary-modal" onclick="confirmarRename()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Pegar texto -->
+<div class="modal-overlay" id="paste-modal">
+    <div class="modal-dialog modal-large">
+        <div class="modal-header">
+            <h3>
+                <i data-lucide="clipboard-paste" style="width:18px;height:18px;display:inline-block;vertical-align:middle;margin-right:8px;"></i>
+                Pegar texto o enlace
+            </h3>
+            <button class="modal-close" onclick="cerrarPasteModal()">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="input-group">
+                <label>Nombre del documento</label>
+                <input type="text" id="paste-name-input" class="modal-input" placeholder="Ej: Artículo sobre IA">
+            </div>
+            <div class="input-group">
+                <label>Pega tu texto o enlace aquí</label>
+                <textarea id="paste-content" class="modal-textarea" placeholder="Pega el texto completo o un enlace web...
+                
+Si pegas un enlace, intentaremos extraer el contenido automáticamente." rows="10"></textarea>
+                <div class="textarea-hint">
+                    💡 Soporta: Texto plano, artículos web, documentos de Google Docs (público)
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary-modal" onclick="cerrarPasteModal()">Cancelar</button>
+            <button class="btn-primary-modal" onclick="confirmarPaste()">Añadir documento</button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Estilos de modales */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-dialog {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease;
+}
+
+.modal-dialog.modal-large {
+    max-width: 700px;
+}
+
+.modal-header {
+    padding: 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+    background: var(--bg);
+    color: var(--text);
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+.input-group {
+    margin-bottom: 20px;
+}
+
+.input-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text);
+}
+
+.modal-input,
+.modal-textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.modal-input:focus,
+.modal-textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(222, 76, 245, 0.1);
+}
+
+.modal-textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+.textarea-hint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.file-info {
+    padding: 12px;
+    background: var(--bg);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 12px;
+}
+
+.modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.btn-secondary-modal,
+.btn-primary-modal {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.btn-secondary-modal {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.btn-secondary-modal:hover {
+    background: var(--panel-bg);
+}
+
+.btn-primary-modal {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-primary-modal:hover {
+    background: #c94dd1;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 768px) {
+    .modal-dialog {
+        width: 95%;
+        max-width: none;
+        margin: 20px;
+    }
+}
+
+/* Lucide icons styling */
+[data-lucide] {
+    stroke-width: 2;
+}
+
+.logo [data-lucide] {
+    width: 22px;
+    height: 22px;
+    vertical-align: middle;
+    margin-right: 8px;
+}
+
+.capsule-title [data-lucide] {
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.add-source-btn [data-lucide] {
+    width: 18px;
+    height: 18px;
+}
+
+.tool-chip-icon [data-lucide] {
+    color: inherit;
+}
+
+.btn-logout [data-lucide],
+.toggle [data-lucide] {
+    width: 18px;
+    height: 18px;
+}
+
+.capsule-close [data-lucide] {
+    width: 18px;
+    height: 18px;
+}
+
+.modal-close [data-lucide] {
+    width: 18px;
+    height: 18px;
+}
+</style>
+
+<input type="hidden" id="session-id" value="{{ session_id }}">
+
+<script src="/static/js/app.js"></script>
+
+<script>
+// Inicializar Lucide icons
+lucide.createIcons();
+
+// Auth
+if (username) {
+    document.getElementById('user-badge').textContent = username;
+}
+
+function logout() {
+    if (confirm('¿Seguro que quieres cerrar sesión?')) {
+        localStorage.clear();
+        window.location.href = '/login';
+    }
+}
+
+// Toggle capsules
+function toggleCapsule(side) {
+    const capsule = document.getElementById(`capsule-${side}`);
+    capsule?.classList.toggle('expanded');
+    
+    // Reinicializar iconos después de toggle
+    setTimeout(() => lucide.createIcons(), 100);
+}
+
+// Status indicators
+function updateProcessingStatus(isProcessing) {
+    const statusLeft = document.getElementById('status-left');
+    const statusRight = document.getElementById('status-right');
+    
+    if (isProcessing) {
+        statusLeft?.classList.add('active');
+        statusRight?.classList.add('active');
+    } else {
+        statusLeft?.classList.remove('active');
+        statusRight?.classList.remove('active');
+    }
+}
+</script>
+
+<!-- Botón Highlights flotante -->
+<button class="btn-highlights" onclick="toggleHighlightsPanel()" title="Mis Highlights">
+    <i data-lucide="bookmark" style="width:24px;height:24px;"></i>
+    <span class="badge" id="highlights-badge" style="display:none;">0</span>
+</button>
+
+<script>
+function updateHighlightsBadge() {
+    const badge = document.getElementById('highlights-badge');
+    if (badge && typeof highlights !== 'undefined') {
+        const count = highlights.length;
+        badge.textContent = count;
+        badge.style.display = count > 0 ? 'block' : 'none';
+    }
+}
+const originalSaveHighlights = typeof saveHighlights !== 'undefined' ? saveHighlights : () => {};
+saveHighlights = function() {
+    originalSaveHighlights();
+    updateHighlightsBadge();
+};
+setTimeout(updateHighlightsBadge, 1000);
+</script>
+</body>
+</html>
