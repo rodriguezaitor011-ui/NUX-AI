@@ -1,0 +1,104 @@
+{
+  "meta": {
+    "title": "NUX AI - Tu Asistente de Estudio Inteligente",
+    "description": "Transforma tus apuntes en resúmenes, flashcards y mapas mentales con IA. Estudia mejor, aprueba más."
+  },
+  "nav": {
+    "home": "Inicio",
+    "features": "Características",
+    "pricing": "Precios",
+    "login": "Iniciar Sesión",
+    "signup": "Registrarse",
+    "logout": "Cerrar Sesión"
+  },
+  "app": {
+    "sources": {
+      "title": "Fuentes",
+      "paste": "Pegar texto",
+      "upload": "Subir archivo",
+      "add_document": "Añadir documento",
+      "empty_title": "Sin documentos",
+      "empty_hint": "Sube PDFs o pega texto para empezar"
+    },
+    "tools": {
+      "title": "Herramientas",
+      "summarize": "Resumir",
+      "summarize_desc": "Resumen ejecutivo",
+      "flashcards": "Flashcards",
+      "flashcards_desc": "Tarjetas de estudio",
+      "analyze": "Analizar",
+      "analyze_desc": "Estructura y conceptos",
+      "mindmap": "Mapa Mental",
+      "mindmap_desc": "Visualización conceptual",
+      "created_content": "Contenidos creados"
+    },
+    "chat": {
+      "title": "Chat con NUX AI",
+      "mode_sources": "Solo fuentes",
+      "mode_general": "Con internet",
+      "new_conversation": "Nueva conversación",
+      "welcome_title": "¡Hola! Soy tu asistente de estudio",
+      "welcome_hint": "Haz clic en las cápsulas laterales para añadir documentos o usar herramientas.",
+      "placeholder": "Pregunta sobre tus documentos...",
+      "send": "Enviar",
+      "typing": "Escribiendo..."
+    },
+    "modal": {
+      "rename_title": "Nombra tu documento",
+      "rename_hint": "Dale un nombre descriptivo para identificarlo fácilmente",
+      "document_name": "Nombre del documento",
+      "rename_placeholder": "Ej: Tema 12 - Fotosíntesis",
+      "paste_title": "Pegar texto o enlace",
+      "paste_name_placeholder": "Ej: Artículo sobre IA",
+      "paste_content_label": "Pega tu texto o enlace aquí",
+      "paste_content_placeholder": "Pega el texto completo o un enlace web...\n\nSi pegas un enlace, intentaremos extraer el contenido automáticamente.",
+      "paste_hint": "💡 Soporta: Texto plano, artículos web, documentos de Google Docs (público)",
+      "add_document": "Añadir documento"
+    },
+    "pomodoro": {
+      "title": "Pomodoro Timer",
+      "focus": "Enfoque",
+      "break": "Descanso",
+      "start": "Iniciar",
+      "pause": "Pausar",
+      "reset": "Reiniciar",
+      "sessions": "Sesiones completadas"
+    },
+    "highlights": {
+      "title": "Mis Highlights",
+      "empty": "No tienes highlights guardados",
+      "add_note": "Añadir nota",
+      "export": "Exportar todo",
+      "clear_all": "Limpiar todo"
+    },
+    "buttons": {
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "copy": "Copiar",
+      "download": "Descargar",
+      "export": "Exportar",
+      "clear": "Limpiar"
+    },
+    "processing": "Procesando...",
+    "confirm_logout": "¿Seguro que quieres cerrar sesión?"
+  },
+  "messages": {
+    "success": {
+      "document_processed": "Documento procesado exitosamente",
+      "copied": "Copiado al portapapeles",
+      "saved": "Guardado correctamente",
+      "login": "Sesión iniciada",
+      "signup": "Cuenta creada exitosamente"
+    },
+    "errors": {
+      "upload_failed": "Error al subir archivo",
+      "processing_failed": "Error al procesar documento",
+      "network_error": "Error de conexión",
+      "invalid_credentials": "Email o contraseña incorrectos",
+      "email_exists": "Este email ya está registrado",
+      "required_field": "Este campo es obligatorio",
+      "file_too_large": "Archivo demasiado grande (máx 10MB)",
+      "unsupported_format": "Formato no soportado"
+    }
+  }
+}

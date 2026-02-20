@@ -1,0 +1,104 @@
+{
+  "meta": {
+    "title": "NUX AI - Your Intelligent Study Assistant",
+    "description": "Transform your notes into summaries, flashcards and mind maps with AI. Study better, pass more."
+  },
+  "nav": {
+    "home": "Home",
+    "features": "Features",
+    "pricing": "Pricing",
+    "login": "Log In",
+    "signup": "Sign Up",
+    "logout": "Log Out"
+  },
+  "app": {
+    "sources": {
+      "title": "Sources",
+      "paste": "Paste text",
+      "upload": "Upload file",
+      "add_document": "Add document",
+      "empty_title": "No documents",
+      "empty_hint": "Upload PDFs or paste text to get started"
+    },
+    "tools": {
+      "title": "Tools",
+      "summarize": "Summarize",
+      "summarize_desc": "Executive summary",
+      "flashcards": "Flashcards",
+      "flashcards_desc": "Study cards",
+      "analyze": "Analyze",
+      "analyze_desc": "Structure and concepts",
+      "mindmap": "Mind Map",
+      "mindmap_desc": "Conceptual visualization",
+      "created_content": "Created content"
+    },
+    "chat": {
+      "title": "Chat with NUX AI",
+      "mode_sources": "Sources only",
+      "mode_general": "With internet",
+      "new_conversation": "New conversation",
+      "welcome_title": "Hello! I'm your study assistant",
+      "welcome_hint": "Click on the side capsules to add documents or use tools.",
+      "placeholder": "Ask something about your documents...",
+      "send": "Send",
+      "typing": "Typing..."
+    },
+    "modal": {
+      "rename_title": "Name your document",
+      "rename_hint": "Give it a descriptive name to identify it easily",
+      "document_name": "Document name",
+      "rename_placeholder": "E.g.: Topic 12 - Photosynthesis",
+      "paste_title": "Paste text or link",
+      "paste_name_placeholder": "E.g.: Article about AI",
+      "paste_content_label": "Paste your text or link here",
+      "paste_content_placeholder": "Paste the full text or a web link...\n\nIf you paste a link, we'll try to extract the content automatically.",
+      "paste_hint": "💡 Supports: Plain text, web articles, Google Docs (public)",
+      "add_document": "Add document"
+    },
+    "pomodoro": {
+      "title": "Pomodoro Timer",
+      "focus": "Focus",
+      "break": "Break",
+      "start": "Start",
+      "pause": "Pause",
+      "reset": "Reset",
+      "sessions": "Completed sessions"
+    },
+    "highlights": {
+      "title": "My Highlights",
+      "empty": "You don't have saved highlights",
+      "add_note": "Add note",
+      "export": "Export all",
+      "clear_all": "Clear all"
+    },
+    "buttons": {
+      "cancel": "Cancel",
+      "save": "Save",
+      "copy": "Copy",
+      "download": "Download",
+      "export": "Export",
+      "clear": "Clear"
+    },
+    "processing": "Processing...",
+    "confirm_logout": "Are you sure you want to log out?"
+  },
+  "messages": {
+    "success": {
+      "document_processed": "Document processed successfully",
+      "copied": "Copied to clipboard",
+      "saved": "Saved successfully",
+      "login": "Logged in",
+      "signup": "Account created successfully"
+    },
+    "errors": {
+      "upload_failed": "Upload failed",
+      "processing_failed": "Processing failed",
+      "network_error": "Connection error",
+      "invalid_credentials": "Invalid email or password",
+      "email_exists": "This email is already registered",
+      "required_field": "This field is required",
+      "file_too_large": "File too large (max 10MB)",
+      "unsupported_format": "Unsupported format"
+    }
+  }
+}
