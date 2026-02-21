@@ -286,7 +286,8 @@ Mantén un tono profesional y académico."""
         ]
         
         compressed = await self._call_groq(
-            model=self.MODELS["contextopenai(
+            model=self.MODELS["context_manager"],
+            messages=messages,
             max_tokens=8000,
             temperature=0.5
         )
