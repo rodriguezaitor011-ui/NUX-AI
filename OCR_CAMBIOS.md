@@ -479,7 +479,7 @@ except Exception as e:
 |---------|--------|
 | **Qué cambió** | Gemini 2.0 Flash → OpenAI Vision (GPT-4o) |
 | **Por qué** | Mayor precisión, mejor caligrafía, integración más simple |
-| **Interfaz pública** | ❌ No cambió - 100% compatible |
+| **Interfaz pública** | ✅ No cambió - 100% compatible |
 | **API Key** | GEMINI_API_KEY → OPENAI_API_KEY |
 | **Librería** | google-generativeai → openai |
 | **Coste** | Gratis (con límites) → ~$0.01-0.02 por OCR |
