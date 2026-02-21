@@ -9,13 +9,14 @@ class Settings:
 
     # Groq (multi-modelo)
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     
     # DeepSeek (chat + flashcards)
     DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
 
-    # Google Gemini (OCR apuntes manuscritos - Vision)
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_OCR_MODEL: str = os.getenv("GEMINI_OCR_MODEL", "gemini-2.0-flash")
+    # OpenAI (OCR apuntes manuscritos - Vision)
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_OCR_MODEL: str = os.getenv("OPENAI_OCR_MODEL", "gpt-4o")
     # Límite tamaño imagen para OCR (bytes). Por defecto 10 MB.
     OCR_MAX_IMAGE_SIZE: int = int(os.getenv("OCR_MAX_IMAGE_SIZE", str(10 * 1024 * 1024)))
     # Tipos MIME permitidos para OCR
@@ -74,12 +75,12 @@ class Settings:
             )
 
     @classmethod
-    def validate_gemini_ocr(cls) -> None:
-        """Valida que Gemini esté configurado para usar la feature OCR de apuntes."""
-        if not cls.GEMINI_API_KEY:
+    def validate_openai_ocr(cls) -> None:
+        """Valida que OpenAI esté configurado para usar la feature OCR de apuntes."""
+        if not cls.OPENAI_API_KEY:
             raise ValueError(
-                "GEMINI_API_KEY no está configurada en tu archivo .env\n"
-                "Consigue tu key en: https://aistudio.google.com/apikey"
+                "OPENAI_API_KEY no está configurada en tu archivo .env\n"
+                "Consigue tu key en: https://platform.openai.com/api/keys"
             )
 
 

@@ -91,14 +91,14 @@ async def app_page(request: Request):
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
 async def ocr_image_endpoint(request: Request, archivo: UploadFile = File(..., alias="image")):
     """
-    OCR de apuntes manuscritos con Gemini 2.0 Flash Vision.
+    OCR de apuntes manuscritos con OpenAI Vision.
     Acepta multipart/form-data con campo 'image'. Devuelve el texto extraído
     para usarlo en Resumen/Flashcards.
     """
     if not OCR_AVAILABLE:
         return JSONResponse(
             status_code=503,
-            content={"error": "OCR no disponible. El módulo gemini_ocr no está disponible."},
+            content={"error": "OCR no disponible. El módulo de OCR no está disponible."},
         )
     
     if not archivo.filename:
@@ -128,10 +128,10 @@ async def ocr_image_endpoint(request: Request, archivo: UploadFile = File(..., a
             },
         )
 
-    if not settings.GEMINI_API_KEY:
+    if not settings.OPENAI_API_KEY:
         return JSONResponse(
             status_code=503,
-            content={"error": "OCR no disponible. Configura GEMINI_API_KEY en el servidor."},
+            content={"error": "OCR no disponible. Configura OPENAI_API_KEY en el servidor."},
         )
 
     try:

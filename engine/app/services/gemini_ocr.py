@@ -1,5 +1,5 @@
 """
-NUX IA - Servicio OCR de apuntes manuscritos con Gemini 2.0 Flash Vision.
+NUX IA - Servicio OCR de apuntes manuscritos con OpenAI Vision.
 Extrae texto de imágenes (fotos de apuntes) para alimentar el pipeline de Resumen y Flashcards.
 """
 
@@ -8,7 +8,7 @@ import logging
 import re
 from typing import Union
 
-import google.generativeai as genai
+from openai import OpenAI
 
 from app.config import settings
 
@@ -33,7 +33,7 @@ class OCRLowQuality(OCRException):
 
 
 class OCRBlockedOrEmpty(OCRException):
-    """Gemini bloqueó la salida o no detectó texto."""
+    """OpenAI bloqueó la salida o no detectó texto."""
 
 
 # Prompt optimizado para caligrafía manuscrita y apuntes
@@ -48,7 +48,7 @@ Extrae TODO el texto visible en la imagen, respetando:
 
 
 def _normalize_mime(mime: str) -> str:
-    """Normaliza MIME type para la API de Gemini."""
+    """Normaliza MIME type para la API de OpenAI."""
     m = (mime or "").strip().lower()
     if m in ("image/jpg", "image/jpeg"):
         return "image/jpeg"
@@ -58,11 +58,11 @@ def _normalize_mime(mime: str) -> str:
 
 
 def _clean_extracted_text(raw: str) -> str:
-    """Limpia y formatea el texto extraído por Gemini."""
+    """Limpia y formatea el texto extraído por OpenAI."""
     if not raw or not isinstance(raw, str):
         return ""
     text = raw.strip()
-    # Quitar posibles bloques de markdown o código que Gemini a veces añade
+    # Quitar posibles bloques de markdown o código que OpenAI a veces añade
     if text.startswith("```"):
         text = re.sub(r"^```\w*\n?", "", text)
         text = re.sub(r"\n?```\s*$", "", text)
@@ -91,7 +91,7 @@ def extract_text_from_image(
     mime_type: str = "image/jpeg",
 ) -> str:
     """
-    Extrae texto de una imagen (apuntes manuscritos) usando Gemini 2.0 Flash Vision.
+    Extrae texto de una imagen (apuntes manuscritos) usando OpenAI Vision.
 
     Args:
         image_input: Imagen como bytes o string base64.
@@ -106,20 +106,22 @@ def extract_text_from_image(
         OCRLowQuality: Imagen borrosa o ilegible.
         OCRBlockedOrEmpty: No se detectó texto o la respuesta fue bloqueada.
     """
-    if not settings.GEMINI_API_KEY:
+    if not settings.OPENAI_API_KEY:
         raise OCRException(
-            "GEMINI_API_KEY no configurada. Añádela a .env para usar OCR de apuntes."
+            "OPENAI_API_KEY no configurada. Añádela a .env para usar OCR de apuntes."
         )
 
-    # Normalizar entrada a bytes
+    # Normalizar entrada a bytes (base64 si es string)
     if isinstance(image_input, str):
         try:
             image_bytes = base64.b64decode(image_input, validate=True)
+            base64_str = image_input
         except Exception as e:
             logger.warning("OCR: base64 decode failed: %s", e)
             raise OCRInvalidImage("Datos de imagen en base64 no válidos.") from e
     else:
         image_bytes = image_input
+        base64_str = base64.b64encode(image_bytes).decode('utf-8')
 
     if not image_bytes:
         raise OCRInvalidImage("No se recibieron datos de imagen.")
@@ -128,51 +130,48 @@ def extract_text_from_image(
     mime = _normalize_mime(mime_type)
 
     try:
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)
     except Exception as e:
-        logger.error("OCR: Gemini configure failed: %s", e)
-        raise OCRException("Error al configurar la API de Gemini.") from e
-
-    model = genai.GenerativeModel(settings.GEMINI_OCR_MODEL)
-
-    # Contenido: imagen (inline_data) + prompt. Formato estándar google-generativeai.
-    image_part = {"inline_data": {"mime_type": mime, "data": image_bytes}}
+        logger.error("OCR: OpenAI client initialization failed: %s", e)
+        raise OCRException("Error al configurar la API de OpenAI.") from e
 
     try:
-        response = model.generate_content(
-            [image_part, OCR_PROMPT],
-            generation_config=genai.types.GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=settings.MAX_TOKENS,
-            ),
+        response = client.chat.completions.create(
+            model=settings.OPENAI_OCR_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": OCR_PROMPT},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime};base64,{base64_str}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=settings.MAX_TOKENS,
+            temperature=0.1
         )
     except Exception as e:
         err_msg = str(e).lower()
-        logger.exception("OCR: Gemini API error: %s", e)
-        if "quota" in err_msg or "429" in err_msg:
-            raise OCRException("Límite de uso de la API de Gemini alcanzado. Intenta más tarde.") from e
+        logger.exception("OCR: OpenAI API error: %s", e)
+        if "quota" in err_msg or "429" in err_msg or "rate_limit" in err_msg:
+            raise OCRException("Límite de uso de la API de OpenAI alcanzado. Intenta más tarde.") from e
         if "invalid" in err_msg or "400" in err_msg or "413" in err_msg:
             raise OCRInvalidImage("La imagen no pudo ser procesada por el modelo.") from e
         raise OCRException(f"Error al procesar la imagen: {e}") from e
 
-    if not response or not response.candidates:
+    if not response or not response.choices:
         raise OCRBlockedOrEmpty("No se obtuvo respuesta del modelo. La imagen puede estar vacía o ser inadecuada.")
 
-    candidate = response.candidates[0]
-    if candidate.finish_reason and "safety" in str(candidate.finish_reason).lower():
-        raise OCRBlockedOrEmpty("La imagen no pudo ser analizada por restricciones de contenido.")
+    raw = response.choices[0].message.content
 
-    # Acceso al texto: response.text (conveniente) o candidate.content.parts[0].text
-    raw = None
-    if hasattr(response, "text") and response.text:
-        raw = response.text.strip()
-    if not raw and candidate.content and getattr(candidate.content, "parts", None):
-        parts = candidate.content.parts
-        if parts and getattr(parts[0], "text", None):
-            raw = parts[0].text.strip()
     if not raw:
         raise OCRBlockedOrEmpty("No se detectó texto en la imagen.")
-    if "[IMAGEN_ILEGIBLE]" in raw.upper() or not raw:
+    if "[IMAGEN_ILEGIBLE]" in raw.upper():
         raise OCRLowQuality(
             "La imagen está borrosa, mal enfocada o no contiene texto legible. Prueba con una foto más nítida."
         )
