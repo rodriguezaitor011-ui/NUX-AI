@@ -560,6 +560,11 @@ async def privacy_page(request: Request):
     """Página de política de privacidad"""
     return templates.TemplateResponse("privacy.html", {"request": request})
 
+@router.get("/privacy-policy", response_class=HTMLResponse)
+async def privacy_policy_page(request: Request):
+    """Alias para /privacy"""
+    return templates.TemplateResponse("privacy.html", {"request": request})
+
 @router.post("/save-chat")
 async def save_chat(request: Request):
     """Guardar mensaje de chat en historial"""
