@@ -608,3 +608,16 @@ async def save_chat(request: Request):
             status_code=500,
             content={"error": "Error al guardar"}
         )
+
+
+@router.get("/terms-of-service", response_class=HTMLResponse)
+async def terms_of_service(request: Request):
+    return templates.TemplateResponse("terms-of-service.html", {"request": request})
+
+@router.get("/about", response_class=HTMLResponse)
+async def about(request: Request):
+    return templates.TemplateResponse("about.html", {"request": request})
+
+@router.get("/contact", response_class=HTMLResponse)
+async def contact(request: Request):
+    return templates.TemplateResponse("contact.html", {"request": request})
