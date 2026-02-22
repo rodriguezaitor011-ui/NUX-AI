@@ -3,7 +3,7 @@ import json
 from fastapi import APIRouter, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, EmailStr, constr
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from typing import Optional, List, Dict
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Import condicional de OCR (solo si está disponible)
 try:
-    from app.services.gemini_ocr import (
+    from app.services.openai_ocr import (
         ocr_image_async,
         OCRException,
         OCRImageTooLarge,
@@ -33,7 +33,15 @@ except (ImportError, ModuleNotFoundError) as e:
 
 # IMPORTS SIMPLIFICADOS (sin SQLAlchemy)
 from app.database import get_user_by_username, get_user_by_email, create_user, save_chat_message
-from app.auth import verify_password, get_password_hash, create_access_token, decode_token
+from app.auth import (
+    verify_password,
+    get_password_hash,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    revoke_refresh_token,
+    is_refresh_token_revoked,
+)
 
 #Router
 router = APIRouter()
@@ -456,16 +464,22 @@ async def chat_general_stream(request: Request):
 
 
 class RegisterRequest(BaseModel):
-    """Modelo para registro de usuario"""
-    email: str
-    username: str
-    password: str
+    """Modelo para registro de usuario con validaciones."""
+    email: EmailStr
+    username: constr(min_length=3, max_length=30, regex=r"^[a-zA-Z0-9_.-]+$")
+    password: constr(min_length=8, max_length=128)
     accept_privacy: bool = Field(default=False)
 
+    @field_validator("accept_privacy")
+    def must_accept_privacy(cls, v):
+        if not v:
+            raise ValueError("Debes aceptar la política de privacidad")
+        return v
+
 class LoginRequest(BaseModel):
-    """Modelo para login de usuario"""
-    email: str
-    password: str
+    """Modelo para login de usuario con validaciones."""
+    email: EmailStr
+    password: constr(min_length=8, max_length=128)
 
 @router.post("/register")
 async def register(data: RegisterRequest):
@@ -503,10 +517,12 @@ async def register(data: RegisterRequest):
         )
         
         # Crear token
-        token = create_access_token({"user_id": new_user['id'], "email": new_user['email']})
-        
+        access_token = create_access_token({"user_id": new_user['id'], "email": new_user['email']})
+        refresh_token = create_refresh_token({"user_id": new_user['id'], "email": new_user['email']})
+
         return JSONResponse(content={
-            "access_token": token,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
             "user": {
                 "id": new_user['id'],
@@ -535,11 +551,13 @@ async def login(data: LoginRequest):
                 content={"error": "Email o contraseña incorrectos"}
             )
         
-        # Crear token
-        token = create_access_token({"user_id": user['id'], "email": user['email']})
-        
+        # Crear tokens
+        access_token = create_access_token({"user_id": user['id'], "email": user['email']})
+        refresh_token = create_refresh_token({"user_id": user['id'], "email": user['email']})
+
         return JSONResponse(content={
-            "access_token": token,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
             "user": {
                 "id": user['id'],
@@ -554,6 +572,57 @@ async def login(data: LoginRequest):
             status_code=500,
             content={"error": "Error al iniciar sesión"}
         )
+
+
+@router.post("/token/refresh")
+async def refresh_token_endpoint(request: Request):
+    """Genera un nuevo access token a partir de un refresh token"""
+    try:
+        body = await request.json()
+        refresh_token = body.get("refresh_token")
+        if not refresh_token:
+            return JSONResponse(status_code=400, content={"error": "refresh_token es requerido"})
+
+        payload = decode_token(refresh_token)
+        if not payload or payload.get("type") != "refresh":
+            return JSONResponse(status_code=401, content={"error": "Refresh token inválido"})
+
+        jti = payload.get("jti")
+        if not jti or is_refresh_token_revoked(jti):
+            return JSONResponse(status_code=401, content={"error": "Refresh token revocado"})
+
+        # Generar nuevo access token
+        access_token = create_access_token({"user_id": payload.get("user_id"), "email": payload.get("email")})
+        return JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
+
+    except Exception as e:
+        logger.exception("Error refresh token: %s", e)
+        return JSONResponse(status_code=500, content={"error": "Error al refrescar token"})
+
+
+@router.post("/logout")
+async def logout(request: Request):
+    """Revoca un refresh token (logout)"""
+    try:
+        body = await request.json()
+        refresh_token = body.get("refresh_token")
+        if not refresh_token:
+            return JSONResponse(status_code=400, content={"error": "refresh_token es requerido"})
+
+        payload = decode_token(refresh_token)
+        if not payload or payload.get("type") != "refresh":
+            return JSONResponse(status_code=401, content={"error": "Refresh token inválido"})
+
+        jti = payload.get("jti")
+        if not jti:
+            return JSONResponse(status_code=400, content={"error": "Token inválido"})
+
+        revoke_refresh_token(jti)
+        return JSONResponse(content={"success": True})
+
+    except Exception as e:
+        logger.exception("Error en logout: %s", e)
+        return JSONResponse(status_code=500, content={"error": "Error al hacer logout"})
 
 @router.get("/privacy", response_class=HTMLResponse)
 async def privacy_page(request: Request):

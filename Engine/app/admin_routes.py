@@ -4,6 +4,7 @@ Compatible con sistema JWT actual
 """
 
 import logging
+import threading
 import json
 import os
 import tempfile
@@ -21,6 +22,9 @@ from app.config import settings
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 logger = logging.getLogger(__name__)
+
+# Lock para operaciones en archivos JSON (evita concurrencia)
+DATA_LOCK = threading.RLock()
 
 # Lista de emails admin: desde configuración o fallback
 ADMIN_EMAILS = (
@@ -46,8 +50,9 @@ def load_json(filepath: str, default=None):
     if not os.path.exists(filepath):
         return default
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            return json.load(f)
+        with DATA_LOCK:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
     except (json.JSONDecodeError, IOError, OSError) as e:
         logger.error("Error cargando %s: %s", filepath, e)
         return default
@@ -57,11 +62,12 @@ def save_json(filepath: str, data) -> bool:
     """Guarda datos en JSON con escritura atómica."""
     try:
         tmp = filepath + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        shutil.move(tmp, filepath)
+        with DATA_LOCK:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            shutil.move(tmp, filepath)
         return True
-    except (IOError, OSError, json.JSONEncodeError) as e:
+    except (IOError, OSError, TypeError) as e:
         logger.error("Error guardando %s: %s", filepath, e)
         return False
 

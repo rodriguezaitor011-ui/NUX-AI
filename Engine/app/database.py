@@ -5,6 +5,7 @@ NO SQLAlchemy required
 
 import json
 import os
+import threading
 from datetime import datetime
 from typing import Optional, List, Dict
 
@@ -16,14 +17,19 @@ CHAT_HISTORY_FILE = os.path.join(DATA_DIR, "chat_history.json")
 # Crear directorio si no existe
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# Lock para operaciones en archivos JSON (evita concurrencia)
+DATA_LOCK = threading.RLock()
+
 # Inicializar archivos si no existen
 if not os.path.exists(USERS_FILE):
-    with open(USERS_FILE, 'w') as f:
-        json.dump([], f)
+    with DATA_LOCK:
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump([], f)
 
 if not os.path.exists(CHAT_HISTORY_FILE):
-    with open(CHAT_HISTORY_FILE, 'w') as f:
-        json.dump([], f)
+    with DATA_LOCK:
+        with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump([], f)
 
 
 # Clases simuladas (para compatibilidad)
@@ -56,8 +62,9 @@ def get_db():
 def load_users() -> List[Dict]:
     """Load users from JSON"""
     try:
-        with open(USERS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        with DATA_LOCK:
+            with open(USERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
     except (json.JSONDecodeError, IOError, OSError) as e:
         import logging
         logger = logging.getLogger(__name__)
@@ -72,10 +79,11 @@ def save_users(users: List[Dict]):
         import shutil
         
         temp_file = USERS_FILE + '.tmp'
-        with open(temp_file, 'w', encoding='utf-8') as f:
-            json.dump(users, f, indent=2, ensure_ascii=False)
-        shutil.move(temp_file, USERS_FILE)
-    except (IOError, OSError, json.JSONEncodeError) as e:
+        with DATA_LOCK:
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                json.dump(users, f, indent=2, ensure_ascii=False)
+            shutil.move(temp_file, USERS_FILE)
+    except (IOError, OSError, TypeError) as e:
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error guardando usuarios: {e}")
@@ -85,8 +93,9 @@ def save_users(users: List[Dict]):
 def load_chat_history() -> List[Dict]:
     """Load chat history from JSON"""
     try:
-        with open(CHAT_HISTORY_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        with DATA_LOCK:
+            with open(CHAT_HISTORY_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
     except (json.JSONDecodeError, IOError, OSError) as e:
         import logging
         logger = logging.getLogger(__name__)
@@ -101,10 +110,11 @@ def save_chat_history(history: List[Dict]):
         import shutil
         
         temp_file = CHAT_HISTORY_FILE + '.tmp'
-        with open(temp_file, 'w', encoding='utf-8') as f:
-            json.dump(history, f, indent=2, ensure_ascii=False)
-        shutil.move(temp_file, CHAT_HISTORY_FILE)
-    except (IOError, OSError, json.JSONEncodeError) as e:
+        with DATA_LOCK:
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                json.dump(history, f, indent=2, ensure_ascii=False)
+            shutil.move(temp_file, CHAT_HISTORY_FILE)
+    except (IOError, OSError, TypeError) as e:
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error guardando historial: {e}")
