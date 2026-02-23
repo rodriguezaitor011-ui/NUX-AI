@@ -3,10 +3,10 @@ import json
 from fastapi import APIRouter, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field, field_validator, EmailStr, constr
+from pydantic import BaseModel, Field, field_validator, EmailStr
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Annotated
 import PyPDF2
 import io
 
@@ -466,8 +466,8 @@ async def chat_general_stream(request: Request):
 class RegisterRequest(BaseModel):
     """Modelo para registro de usuario con validaciones."""
     email: EmailStr
-    username: constr(min_length=3, max_length=30, regex=r"^[a-zA-Z0-9_.-]+$")
-    password: constr(min_length=8, max_length=128)
+    username: Annotated[str, Field(..., min_length=3, max_length=30, pattern=r"^[a-zA-Z0-9_.-]+$")]
+    password: Annotated[str, Field(..., min_length=8, max_length=128)]
     accept_privacy: bool = Field(default=False)
 
     @field_validator("accept_privacy")
@@ -479,7 +479,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     """Modelo para login de usuario con validaciones."""
     email: EmailStr
-    password: constr(min_length=8, max_length=128)
+    password: Annotated[str, Field(..., min_length=8, max_length=128)]
 
 @router.post("/register")
 async def register(data: RegisterRequest):
