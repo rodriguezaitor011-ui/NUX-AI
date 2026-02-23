@@ -105,3 +105,26 @@ def decode_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+def get_token_from_request(request) -> Optional[str]:
+    """
+    Extrae el token JWT del header Authorization: Bearer <token>
+    Soporta también query param 'token' para retrocompatibilidad.
+    
+    Args:
+        request: FastAPI Request object
+        
+    Returns:
+        Token string o None si no se encuentra
+    """
+    # Método 1: Authorization header (recomendado)
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:]  # Quitar "Bearer "
+    
+    # Método 2: Query param 'token' (retrocompatible)
+    token = request.query_params.get("token")
+    if token:
+        return token
+    
+    return None

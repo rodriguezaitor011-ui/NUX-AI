@@ -54,6 +54,46 @@ document.addEventListener('keydown', function(e) {
 });
 
 // ========================================
+// FETCH WITH AUTHORIZATION
+// ========================================
+
+/**
+ * Realiza un fetch autenticado con Bearer token en Authorization header
+ * @param {string} url - URL del endpoint
+ * @param {object} options - Opciones de fetch (method, body, etc)
+ * @returns {Promise<Response>} - Respuesta del servidor
+ */
+async function fetchWithAuth(url, options = {}) {
+    const token = localStorage.getItem('auth_token');
+    
+    // Preparar headers
+    const headers = {
+        ...options.headers,
+    };
+    
+    // Añadir Authorization header si tenemos token
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    // Hacer fetch
+    const response = await fetch(url, {
+        ...options,
+        headers: headers
+    });
+    
+    // Si recibimos 401, el token expiró
+    if (response.status === 401) {
+        console.warn('⚠️ Token expirado. Redirigiendo a login...');
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/login';
+    }
+    
+    return response;
+}
+
+// ========================================
 // GUARDAR EN HISTORIAL
 // ========================================
 
@@ -62,11 +102,10 @@ async function guardarEnHistorial(mensaje, respuesta) {
     if (!token) return;
     
     try {
-        await fetch('/save-chat', {
+        await fetchWithAuth('/save-chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                token: token,
                 message: mensaje,
                 response: respuesta
             })

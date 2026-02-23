@@ -41,6 +41,7 @@ from app.auth import (
     decode_token,
     revoke_refresh_token,
     is_refresh_token_revoked,
+    get_token_from_request,
 )
 
 #Router
@@ -636,17 +637,19 @@ async def privacy_policy_page(request: Request):
 
 @router.post("/save-chat")
 async def save_chat(request: Request):
-    """Guardar mensaje de chat en historial"""
+    """Guardar mensaje de chat en historial - Autenticado con Bearer token"""
     try:
         data = await request.json()
-        token = data.get("token")
         message = data.get("message")
         response = data.get("response")
+        
+        # Extraer token del header Authorization o query params
+        token = get_token_from_request(request)
         
         if not token:
             return JSONResponse(
                 status_code=401,
-                content={"error": "No autenticado"}
+                content={"error": "Token no proporcionado en Authorization header"}
             )
         
         # Decodificar token para obtener user info
@@ -654,10 +657,10 @@ async def save_chat(request: Request):
         if not payload:
             return JSONResponse(
                 status_code=401,
-                content={"error": "Token inválido"}
+                content={"error": "Token inválido o expirado"}
             )
         
-        # Obtener username del payload (necesitamos añadirlo al token)
+        # Obtener usuario del payload
         user_email = payload.get("email")
         user = get_user_by_email(user_email)
         
