@@ -21,10 +21,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Ejecuta al inicio y cierre de la aplicación"""
-    
+
     # ── Startup ──────────────────────────────────────────
     logger.info("Iniciando aplicación...")
-    
+
     # 1. Validar configuración (API keys, SECRET_KEY, etc.)
     try:
         settings.validate()
@@ -37,9 +37,11 @@ async def lifespan(app: FastAPI):
     try:
         from app.database import init_db
         init_db()
+        logger.info("✅ Base de datos inicializada correctamente")
     except Exception as e:
         logger.error(f"❌ Error inicializando base de datos: {e}")
-        raise
+        # ⚠️ Sin raise — la app arranca aunque la DB falle
+        # Diagnóstica desde /health en vez de crash total
 
     yield
 
@@ -82,21 +84,25 @@ app.include_router(admin_router)
 
 @app.get("/health")
 async def health_check():
-    """Health check — también verifica conexión a la DB"""
+    """Health check — verifica conexión a la DB"""
+    db_status = "disconnected"
+    db_error = None
+
     try:
         from app.database import SessionLocal, User
         with SessionLocal() as db:
             db.query(User).limit(1).all()
         db_status = "connected"
     except Exception as e:
+        db_error = str(e)[:100]  # primeros 100 chars para no exponer info sensible
         logger.error(f"Health check DB error: {e}")
-        db_status = "error"
 
     return {
         "status": "healthy" if db_status == "connected" else "degraded",
         "app": settings.APP_NAME,
         "version": "2.0.0",
         "database": db_status,
+        "database_error": db_error if db_status != "connected" else None,
         "environment": settings.ENVIRONMENT,
     }
 
@@ -109,3 +115,4 @@ if __name__ == "__main__":
         port=8000,
         reload=settings.DEBUG
     )
+
