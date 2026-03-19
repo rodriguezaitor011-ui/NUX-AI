@@ -31,3 +31,42 @@ bcrypt==4.0.1
 python-jose[cryptography]==3.3.0
 
 # Testing
+# NUX IA - Requirements for Production (Simplified)
+
+# Core
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+jinja2==3.1.3
+
+# Data Validation & Config
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+email-validator>=2.0.0
+
+# AI & APIs
+groq==0.4.2
+httpx==0.26.0
+openai>=1.3.0
+
+# PDF Processing
+PyPDF2==3.0.1
+
+# Rate Limiting
+slowapi==0.1.9
+
+# Environment
+python-dotenv==1.0.0
+
+# Security (authentication)
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-jose[cryptography]==3.3.0
+
+# ✅ NUEVO: PostgreSQL
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+alembic>=1.13.0
+
+# Testing
+pytest

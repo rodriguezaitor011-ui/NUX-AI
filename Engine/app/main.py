@@ -21,22 +21,33 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Ejecuta al inicio y cierre de la aplicación"""
-    # Startup
+    
+    # ── Startup ──────────────────────────────────────────
     logger.info("Iniciando aplicación...")
+    
+    # 1. Validar configuración (API keys, SECRET_KEY, etc.)
     try:
         settings.validate()
         logger.info("✅ Configuración validada correctamente")
     except ValueError as e:
         logger.error(f"❌ Error de configuración: {e}")
         raise
-    
+
+    # 2. Inicializar base de datos (crea tablas si no existen)
+    try:
+        from app.database import init_db
+        init_db()
+    except Exception as e:
+        logger.error(f"❌ Error inicializando base de datos: {e}")
+        raise
+
     yield
-    
-    # Shutdown
+
+    # ── Shutdown ──────────────────────────────────────────
     logger.info("Cerrando aplicación...")
 
 
-# Crear app
+# ── Crear app ─────────────────────────────────────────────
 app = FastAPI(
     title=settings.APP_NAME,
     description="Aplicación para resumir textos usando IA",
@@ -48,7 +59,7 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS (configurar según tus necesidades)
+# CORS
 cors_origins = settings.CORS_ORIGINS if settings.CORS_ORIGINS != ["*"] else ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -58,24 +69,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Montar archivos estáticos
+# Archivos estáticos
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# Incluir rutas principales
+# Rutas principales
 app.include_router(router)
 
-# Incluir rutas de admin
+# Rutas de admin
 from app.admin_routes import router as admin_router
 app.include_router(admin_router)
 
 
 @app.get("/health")
 async def health_check():
-    """Endpoint de health check"""
+    """Health check — también verifica conexión a la DB"""
+    try:
+        from app.database import SessionLocal, User
+        with SessionLocal() as db:
+            db.query(User).limit(1).all()
+        db_status = "connected"
+    except Exception as e:
+        logger.error(f"Health check DB error: {e}")
+        db_status = "error"
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "connected" else "degraded",
         "app": settings.APP_NAME,
-        "version": "2.0.0"
+        "version": "2.0.0",
+        "database": db_status,
+        "environment": settings.ENVIRONMENT,
     }
 
 
