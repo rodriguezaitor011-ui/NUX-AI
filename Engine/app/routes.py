@@ -44,7 +44,7 @@ from app.auth import (
     get_token_from_request,
 )
 
-#Router
+# Router
 router = APIRouter()
 
 # Configuración de templates
@@ -53,14 +53,13 @@ templates = Jinja2Templates(directory="app/templates")
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
-
 # Modos disponibles
 MODOS_VALIDOS = ["general", "estudiar", "corto", "profesional"]
 
 # Cache temporal para estructura de documentos (en producción usar Redis)
 document_cache = {}
 
-# MIME types permitidos para OCR (debe coincidir con config.OCR_ALLOWED_MIME_TYPES)
+# MIME types permitidos para OCR
 OCR_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
@@ -82,7 +81,7 @@ class ResumenRequest(BaseModel):
     instrucciones: Optional[str] = ""
     modo: str = "general"
     task: str = "summary"
-    
+
     @field_validator('modo')
     def validar_modo(cls, v):
         if v not in MODOS_VALIDOS:
@@ -101,21 +100,22 @@ async def app_page(request: Request):
 async def ocr_image_endpoint(request: Request, archivo: UploadFile = File(..., alias="image")):
     """
     OCR de apuntes manuscritos con OpenAI Vision.
-    Acepta multipart/form-data con campo 'image'. Devuelve el texto extraído
-    para usarlo en Resumen/Flashcards.
+    Acepta multipart/form-data con campo 'image'. Devuelve el texto extraído.
     """
     if not OCR_AVAILABLE:
         return JSONResponse(
             status_code=503,
             content={"error": "OCR no disponible. El módulo de OCR no está disponible."},
         )
-    
+
     if not archivo.filename:
         return JSONResponse(status_code=400, content={"error": "No se envió ningún archivo"})
 
-    # Validar tipo por extensión y content-type
     ext = (archivo.filename or "").lower().split(".")[-1]
-    mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "gif": "image/gif"}
+    mime_map = {
+        "jpg": "image/jpeg", "jpeg": "image/jpeg",
+        "png": "image/png", "webp": "image/webp", "gif": "image/gif"
+    }
     mime_type = mime_map.get(ext) or (archivo.content_type or "").split(";")[0].strip().lower()
     if mime_type not in OCR_ALLOWED_MIMES:
         return JSONResponse(
@@ -175,37 +175,35 @@ async def resumir(
     Endpoint principal con pipeline multi-modelo
     """
     processing_status = []
-    
+
     try:
-        # Validar que al menos uno existe
         if not texto and not (archivo and archivo.filename):
             return JSONResponse(
                 status_code=400,
                 content={"error": "Debes proporcionar texto o archivo"}
             )
-        
-        # Procesar archivo si existe
+
         if archivo and archivo.filename:
             contenido_bytes = await archivo.read()
-            
+
             if archivo.filename.endswith(".txt"):
                 try:
                     texto = contenido_bytes.decode("utf-8")
                 except UnicodeDecodeError:
                     texto = contenido_bytes.decode("latin-1")
                 processing_status.append("📄 Archivo .txt cargado")
-                
+
             elif archivo.filename.endswith(".pdf"):
                 try:
                     pdf_file = io.BytesIO(contenido_bytes)
                     pdf_reader = PyPDF2.PdfReader(pdf_file)
-                    
+
                     texto = ""
                     for page in pdf_reader.pages:
                         texto += page.extract_text() + "\n"
-                    
+
                     processing_status.append(f"📄 PDF procesado: {len(pdf_reader.pages)} páginas")
-                    
+
                     if not texto.strip():
                         return templates.TemplateResponse("index.html", {
                             "request": request,
@@ -213,7 +211,7 @@ async def resumir(
                             "error_msg": "No se pudo extraer texto del PDF",
                             "processing_status": processing_status
                         })
-                        
+
                 except Exception as e:
                     logger.error(f"Error procesando PDF: {e}")
                     return templates.TemplateResponse("index.html", {
@@ -222,32 +220,27 @@ async def resumir(
                         "processing_status": processing_status
                     })
 
-        # Truncar si es muy largo
         if len(texto) > settings.MAX_TEXT_LENGTH:
             texto = texto[:settings.MAX_TEXT_LENGTH]
             processing_status.append(f"⚠️ Texto truncado a {settings.MAX_TEXT_LENGTH} caracteres")
 
-        # Validar datos
         datos = ResumenRequest(
             texto=texto,
             instrucciones=instrucciones,
             modo=modo,
             task=task
         )
-        
 
         logger.info(f"Request desde {request.client.host} [modo: {datos.modo}, task: {datos.task}]")
-        
-        # === PIPELINE MULTI-MODELO ===
-        processing_status.append("🔍 Analizando estructura (Llama 4 Scout)...")
-        
-        # Ejecutar pipeline
+
+        processing_status.append("🔍 Analizando estructura...")
+
         resultado, estructura, error_msg = await process_document_pipeline(
             text=datos.texto,
             modo=datos.modo,
             task=datos.task
         )
-        
+
         if error_msg:
             return templates.TemplateResponse("index.html", {
                 "request": request,
@@ -255,8 +248,8 @@ async def resumir(
                 "error_msg": error_msg,
                 "processing_status": processing_status
             })
-        
-        # Guardar estructura en caché para el chat
+
+        session_id = None
         if estructura:
             session_id = str(hash(datos.texto[:100]))
             document_cache[session_id] = {
@@ -265,8 +258,8 @@ async def resumir(
                 "original_text": datos.texto[:5000]
             }
             processing_status.append(f"✅ Documento procesado: {estructura.get('tema_principal', 'N/A')}")
-        
-        # Determinar qué mostrar
+            logger.info(f"💾 Sesión guardada en caché: {session_id}")
+
         template_data = {
             "request": request,
             "texto": datos.texto,
@@ -280,8 +273,7 @@ async def resumir(
             "processing_status": processing_status,
             "modelo": "NXUS o.0.1"
         }
-        
-        # Si es una petición AJAX (desde JS), devolver JSON
+
         if request.headers.get("X-Requested-With") == "XMLHttpRequest" or \
            request.headers.get("Accept", "").startswith("application/json"):
             return JSONResponse(content={
@@ -292,7 +284,7 @@ async def resumir(
                 "session_id": session_id if estructura else None,
                 "modelo": "NXUS o.0.1"
             })
-        
+
         return templates.TemplateResponse("index.html", template_data)
 
     except ValueError as e:
@@ -314,49 +306,68 @@ async def resumir(
         })
 
 
+# ============================================================
+# CHAT — SOLO FUENTES Y GENERAL
+# ============================================================
+
 class ChatRequest(BaseModel):
     """Modelo para peticiones de chat"""
     question: str
     session_id: Optional[str] = None
     mode: str = "sources"
+    history: Optional[List[Dict]] = []   # ← AÑADIDO: historial de conversación
 
 
 @router.post("/chat")
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
 async def chat_endpoint(request: Request, data: ChatRequest):
     """
-    Endpoint de chat mejorado
+    Endpoint de chat — modo 'sources' (con contexto de documento) y 'general'
     """
     try:
-        logger.info(f"Chat request - Mode: {data.mode}, Session: {data.session_id}")
-        
-        # Verificar si hay documento en caché
+        logger.info(
+            f"Chat request | Mode: {data.mode} | "
+            f"Session: {data.session_id} | "
+            f"Question: {data.question[:60]}..."
+        )
+
+        # Recuperar contexto del documento si existe en caché
         doc_context = None
         if data.session_id and data.session_id in document_cache:
             doc_context = document_cache[data.session_id]
-        
-        # Llamar al chat
+            logger.info(f"✅ Contexto encontrado para sesión {data.session_id}")
+        else:
+            if data.mode == "sources":
+                logger.warning(
+                    f"⚠️ Sesión '{data.session_id}' no encontrada en caché. "
+                    "El usuario debe procesar documentos primero (Resumir/Analizar)."
+                )
+
+        # Llamar al orquestador — devuelve string directamente
         response_text = await chat_with_document(
             question=data.question,
             document_context=doc_context,
-            mode=data.mode
+            mode=data.mode,
+            history=data.history or []    # ← AÑADIDO: pasar historial
         )
-        
+
         return JSONResponse(content={
             "answer": response_text,
-            "mode": data.mode
+            "mode": data.mode,
+            "has_context": doc_context is not None   # ← AÑADIDO: info para el frontend
         })
-        
+
     except Exception as e:
-        logger.error(f"Error en chat: {e}", exc_info=True)
+        logger.error(f"Error en chat endpoint: {e}", exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"error": f"Error procesando pregunta: {str(e)}"}
         )
 
 
-# === AUTH ROUTES (SIMPLIFICADAS SIN SQLALCHEMY) ===
-
+# ============================================================
+# CHAT GENERAL CON STREAMING (Server-Sent Events)
+# ============================================================
 
 @router.post("/chat-general-stream")
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
@@ -366,43 +377,45 @@ async def chat_general_stream(request: Request):
     """
     try:
         data = await request.json()
-        logger.info(f"📩 Chat-general-stream - Data: {data}")
-        
+        logger.info(f"📩 Chat-general-stream - Data keys: {list(data.keys())}")
+
         pregunta = data.get("pregunta", "")
         historial = data.get("historial", [])
-        
-        logger.info(f"📝 Pregunta: '{pregunta}' | Historial: {len(historial)} items")
-        
+
+        logger.info(f"📝 Pregunta: '{pregunta[:60]}' | Historial: {len(historial)} items")
+
         if not pregunta or not pregunta.strip():
-            logger.warning(f"⚠️ Pregunta vacía! Keys: {list(data.keys())}")
+            logger.warning(f"⚠️ Pregunta vacía! Keys recibidas: {list(data.keys())}")
             return JSONResponse(
                 status_code=400,
                 content={"error": "Pregunta vacía", "debug": list(data.keys())}
             )
-        
+
         logger.info(f"✅ Iniciando streaming desde {request.client.host}")
-        
+
         async def generate():
             from app.services.ai_orchestrator import ModelOrchestrator
             import httpx
-            
+
             async with ModelOrchestrator() as orchestrator:
                 messages = [
                     {
                         "role": "system",
-                        "content": "Eres StudIA, un asistente de estudio inteligente y amigable. Ayudas a los estudiantes con cualquier pregunta académica o de conocimiento general. Responde de forma clara, precisa y educativa. Usa Markdown para formatear tus respuestas (negritas, listas, etc)."
+                        "content": (
+                            "Eres StudIA, un asistente de estudio inteligente y amigable. "
+                            "Ayudas a los estudiantes con cualquier pregunta académica o de "
+                            "conocimiento general. Responde de forma clara, precisa y educativa. "
+                            "Usa Markdown para formatear tus respuestas (negritas, listas, etc)."
+                        )
                     }
                 ]
-                
-                # Historial
+
                 for item in historial[-5:]:
                     messages.append({"role": "user", "content": item.get("pregunta", "")})
                     messages.append({"role": "assistant", "content": item.get("respuesta", "")})
-                
-                # Pregunta actual
+
                 messages.append({"role": "user", "content": pregunta})
-                
-                # Llamar a DeepSeek con streaming
+
                 try:
                     payload = {
                         "model": "deepseek-chat",
@@ -411,7 +424,7 @@ async def chat_general_stream(request: Request):
                         "temperature": 0.7,
                         "stream": True
                     }
-                    
+
                     async with httpx.AsyncClient(timeout=60.0) as client:
                         async with client.stream(
                             "POST",
@@ -425,28 +438,25 @@ async def chat_general_stream(request: Request):
                             async for line in response.aiter_lines():
                                 if line.startswith("data: "):
                                     data_str = line[6:]
-                                    
+
                                     if data_str == "[DONE]":
                                         yield "data: [DONE]\n\n"
                                         break
-                                    
+
                                     try:
-                                        import json
                                         chunk_data = json.loads(data_str)
-                                        
                                         if chunk_data.get("choices"):
                                             delta = chunk_data["choices"][0].get("delta", {})
                                             content = delta.get("content", "")
-                                            
                                             if content:
                                                 yield f"data: {json.dumps({'content': content})}\n\n"
-                                    except:
+                                    except Exception:
                                         pass
-                    
+
                 except Exception as e:
-                    logger.error(f"Error en streaming: {e}")
+                    logger.error(f"Error en streaming DeepSeek: {e}")
                     yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        
+
         return StreamingResponse(
             generate(),
             media_type="text/event-stream",
@@ -455,7 +465,7 @@ async def chat_general_stream(request: Request):
                 "Connection": "keep-alive",
             }
         )
-        
+
     except Exception as e:
         logger.error(f"Error en chat streaming: {e}", exc_info=True)
         return JSONResponse(
@@ -463,6 +473,10 @@ async def chat_general_stream(request: Request):
             content={"error": "Error al procesar la pregunta"}
         )
 
+
+# ============================================================
+# AUTH
+# ============================================================
 
 class RegisterRequest(BaseModel):
     """Modelo para registro de usuario con validaciones."""
@@ -477,47 +491,44 @@ class RegisterRequest(BaseModel):
             raise ValueError("Debes aceptar la política de privacidad")
         return v
 
+
 class LoginRequest(BaseModel):
     """Modelo para login de usuario con validaciones."""
     email: EmailStr
     password: Annotated[str, Field(..., min_length=8, max_length=128)]
 
+
 @router.post("/register")
 async def register(data: RegisterRequest):
     """Registrar nuevo usuario"""
     try:
-        # Verificar si el email ya existe
         existing_user = get_user_by_email(data.email)
         if existing_user:
             return JSONResponse(
                 status_code=400,
                 content={"error": "Email ya registrado"}
             )
-        
-        # Verificar username
+
         existing_username = get_user_by_username(data.username)
         if existing_username:
             return JSONResponse(
                 status_code=400,
                 content={"error": "Username ya existe"}
             )
-        
-        # Verificar que aceptó la política
+
         if not data.accept_privacy:
             return JSONResponse(
                 status_code=400,
                 content={"error": "Debes aceptar la política de privacidad"}
             )
-        
-        # Crear usuario
+
         hashed_password = get_password_hash(data.password)
         new_user = create_user(
             username=data.username,
             email=data.email,
             hashed_password=hashed_password
         )
-        
-        # Crear token
+
         access_token = create_access_token({"user_id": new_user['id'], "email": new_user['email']})
         refresh_token = create_refresh_token({"user_id": new_user['id'], "email": new_user['email']})
 
@@ -531,7 +542,7 @@ async def register(data: RegisterRequest):
                 "username": new_user['username']
             }
         })
-        
+
     except Exception as e:
         logger.error(f"Error en registro: {e}")
         return JSONResponse(
@@ -539,20 +550,19 @@ async def register(data: RegisterRequest):
             content={"error": "Error al crear usuario"}
         )
 
+
 @router.post("/login")
 async def login(data: LoginRequest):
     """Login de usuario"""
     try:
-        # Buscar usuario
         user = get_user_by_email(data.email)
-        
+
         if not user or not verify_password(data.password, user['hashed_password']):
             return JSONResponse(
                 status_code=401,
                 content={"error": "Email o contraseña incorrectos"}
             )
-        
-        # Crear tokens
+
         access_token = create_access_token({"user_id": user['id'], "email": user['email']})
         refresh_token = create_refresh_token({"user_id": user['id'], "email": user['email']})
 
@@ -566,7 +576,7 @@ async def login(data: LoginRequest):
                 "username": user['username']
             }
         })
-        
+
     except Exception as e:
         logger.error(f"Error en login: {e}")
         return JSONResponse(
@@ -592,7 +602,6 @@ async def refresh_token_endpoint(request: Request):
         if not jti or is_refresh_token_revoked(jti):
             return JSONResponse(status_code=401, content={"error": "Refresh token revocado"})
 
-        # Generar nuevo access token
         access_token = create_access_token({"user_id": payload.get("user_id"), "email": payload.get("email")})
         return JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
 
@@ -625,15 +634,39 @@ async def logout(request: Request):
         logger.exception("Error en logout: %s", e)
         return JSONResponse(status_code=500, content={"error": "Error al hacer logout"})
 
+
+# ============================================================
+# PÁGINAS ESTÁTICAS
+# ============================================================
+
 @router.get("/privacy", response_class=HTMLResponse)
 async def privacy_page(request: Request):
-    """Página de política de privacidad"""
     return templates.TemplateResponse("privacy.html", {"request": request})
+
 
 @router.get("/privacy-policy", response_class=HTMLResponse)
 async def privacy_policy_page(request: Request):
-    """Alias para /privacy"""
     return templates.TemplateResponse("privacy.html", {"request": request})
+
+
+@router.get("/terms-of-service", response_class=HTMLResponse)
+async def terms_of_service(request: Request):
+    return templates.TemplateResponse("terms-of-service.html", {"request": request})
+
+
+@router.get("/about", response_class=HTMLResponse)
+async def about(request: Request):
+    return templates.TemplateResponse("about.html", {"request": request})
+
+
+@router.get("/contact", response_class=HTMLResponse)
+async def contact(request: Request):
+    return templates.TemplateResponse("contact.html", {"request": request})
+
+
+# ============================================================
+# SAVE CHAT
+# ============================================================
 
 @router.post("/save-chat")
 async def save_chat(request: Request):
@@ -642,59 +675,42 @@ async def save_chat(request: Request):
         data = await request.json()
         message = data.get("message")
         response = data.get("response")
-        
-        # Extraer token del header Authorization o query params
+
         token = get_token_from_request(request)
-        
+
         if not token:
             return JSONResponse(
                 status_code=401,
                 content={"error": "Token no proporcionado en Authorization header"}
             )
-        
-        # Decodificar token para obtener user info
+
         payload = decode_token(token)
         if not payload:
             return JSONResponse(
                 status_code=401,
                 content={"error": "Token inválido o expirado"}
             )
-        
-        # Obtener usuario del payload
+
         user_email = payload.get("email")
         user = get_user_by_email(user_email)
-        
+
         if not user:
             return JSONResponse(
                 status_code=401,
                 content={"error": "Usuario no encontrado"}
             )
-        
-        # Guardar chat
+
         save_chat_message(
             username=user['username'],
             message=message,
             response=response
         )
-        
+
         return JSONResponse(content={"success": True})
-        
+
     except Exception as e:
         logger.error(f"Error guardando chat: {e}")
         return JSONResponse(
             status_code=500,
             content={"error": "Error al guardar"}
         )
-
-
-@router.get("/terms-of-service", response_class=HTMLResponse)
-async def terms_of_service(request: Request):
-    return templates.TemplateResponse("terms-of-service.html", {"request": request})
-
-@router.get("/about", response_class=HTMLResponse)
-async def about(request: Request):
-    return templates.TemplateResponse("about.html", {"request": request})
-
-@router.get("/contact", response_class=HTMLResponse)
-async def contact(request: Request):
-    return templates.TemplateResponse("contact.html", {"request": request})

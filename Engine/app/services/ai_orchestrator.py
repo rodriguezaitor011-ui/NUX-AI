@@ -671,18 +671,60 @@ async def process_document_pipeline(
             return None, None, f"Error en el pipeline: {str(e)}"
 
 
+# ai_orchestrator.py
+# REEMPLAZAR la función chat_with_document al final del archivo
+
 async def chat_with_document(
-    summary: str,
-    structure: Dict,
     question: str,
+    document_context: Optional[Dict] = None,
+    mode: str = "sources",
     history: List[Dict] = None
-) -> Tuple[Optional[str], Optional[str]]:
+) -> str:
+    """
+    Wrapper público para el chat.
+    Acepta el doc_context como dict con keys: summary, structure, original_text
+    Retorna string directamente (no tuple).
+    """
     async with ModelOrchestrator() as orchestrator:
         try:
-            response = await orchestrator.chat_with_tutor(summary, structure, question, history)
-            if not response:
-                return None, "Error al generar respuesta"
-            return response, None
+            if mode == "general" or not document_context:
+                # Sin contexto de documento: responder como asistente general
+                response = await orchestrator._call_deepseek(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "Eres StudIA, un asistente académico experto. "
+                                "Responde de forma clara, precisa y educativa. "
+                                "Usa Markdown para formatear tus respuestas."
+                            )
+                        },
+                        {"role": "user", "content": question}
+                    ],
+                    max_tokens=1500,
+                    temperature=0.7
+                )
+                return response or "No pude generar una respuesta."
+
+            # Extraer summary y structure del context dict
+            summary = document_context.get("summary", "")
+            structure = document_context.get("structure", {})
+
+            if not summary or not structure:
+                return (
+                    "No hay documentos procesados en esta sesión. "
+                    "Usa una herramienta primero (Resumir, Analizar) para procesar tus fuentes."
+                )
+
+            response = await orchestrator.chat_with_tutor(
+                summary=summary,
+                structure=structure,
+                question=question,
+                history=history or []
+            )
+
+            return response or "No pude generar una respuesta sobre el documento."
+
         except Exception as e:
-            logger.error(f"Chat error: {e}")
-            return None, f"Error en chat: {str(e)}"
+            logger.error(f"chat_with_document error: {e}", exc_info=True)
+            return f"Error al procesar la pregunta: {str(e)}"

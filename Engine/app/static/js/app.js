@@ -57,32 +57,17 @@ document.addEventListener('keydown', function(e) {
 // FETCH WITH AUTHORIZATION
 // ========================================
 
-/**
- * Realiza un fetch autenticado con Bearer token en Authorization header
- * @param {string} url - URL del endpoint
- * @param {object} options - Opciones de fetch (method, body, etc)
- * @returns {Promise<Response>} - Respuesta del servidor
- */
 async function fetchWithAuth(url, options = {}) {
     const token = localStorage.getItem('auth_token');
     
-    // Preparar headers
-    const headers = {
-        ...options.headers,
-    };
+    const headers = { ...options.headers };
     
-    // Añadir Authorization header si tenemos token
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // Hacer fetch
-    const response = await fetch(url, {
-        ...options,
-        headers: headers
-    });
+    const response = await fetch(url, { ...options, headers });
     
-    // Si recibimos 401, el token expiró
     if (response.status === 401) {
         console.warn('⚠️ Token expirado. Redirigiendo a login...');
         localStorage.removeItem('auth_token');
@@ -163,9 +148,7 @@ function addSource(input) {
         return;
     }
     
-    // Mostrar modal de renombrar
     mostrarRenameModal(file);
-    
     input.value = '';
 }
 
@@ -246,15 +229,12 @@ function mostrarRenameModal(file) {
     input.select();
     
     input.onkeypress = function(e) {
-        if (e.key === 'Enter') {
-            confirmarRename();
-        }
+        if (e.key === 'Enter') confirmarRename();
     };
 }
 
 function cerrarRenameModal() {
-    const modal = document.getElementById('rename-modal');
-    modal.classList.remove('active');
+    document.getElementById('rename-modal').classList.remove('active');
     pendingFile = null;
 }
 
@@ -317,8 +297,7 @@ function mostrarPasteModal() {
 }
 
 function cerrarPasteModal() {
-    const modal = document.getElementById('paste-modal');
-    modal.classList.remove('active');
+    document.getElementById('paste-modal').classList.remove('active');
 }
 
 async function confirmarPaste() {
@@ -361,25 +340,20 @@ async function confirmarPaste() {
     renderSources();
     
     agregarMensajeSistema(`📄 ${nombre} añadido (${source.size})`);
-    
     cerrarPasteModal();
 }
 
 // Cerrar modales con click fuera
 document.addEventListener('click', function(e) {
     if (e.target.classList.contains('modal-overlay')) {
-        if (e.target.id === 'rename-modal') {
-            cerrarRenameModal();
-        } else if (e.target.id === 'paste-modal') {
-            cerrarPasteModal();
-        } else if (e.target.id === 'ocr-modal') {
-            cerrarOCRModal();
-        }
+        if (e.target.id === 'rename-modal') cerrarRenameModal();
+        else if (e.target.id === 'paste-modal') cerrarPasteModal();
+        else if (e.target.id === 'ocr-modal') cerrarOCRModal();
     }
 });
 
 // ========================================
-// MODAL: OCR Escanear apuntes (Gemini Vision)
+// MODAL: OCR Escanear apuntes
 // ========================================
 
 let pendingOCRFile = null;
@@ -476,16 +450,13 @@ async function confirmarOCR() {
 
         const data = await response.json().catch(() => ({}));
 
-        if (!response.ok) {
-            throw new Error(data.error || 'Error al extraer el texto');
-        }
-
-        if (!data.text || !data.text.trim()) {
-            throw new Error('No se detectó texto en la imagen');
-        }
+        if (!response.ok) throw new Error(data.error || 'Error al extraer el texto');
+        if (!data.text || !data.text.trim()) throw new Error('No se detectó texto en la imagen');
 
         const sourceId = Date.now().toString();
-        const name = 'Apuntes escaneados ' + new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        const name = 'Apuntes escaneados ' + new Date().toLocaleDateString('es-ES', {
+            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+        });
         const source = {
             id: sourceId,
             name: name,
@@ -548,9 +519,7 @@ async function procesarMensajeGeneral(mensaje) {
     try {
         const response = await fetch('/chat-general-stream', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 pregunta: mensaje,
                 historial: chatHistory
@@ -559,9 +528,7 @@ async function procesarMensajeGeneral(mensaje) {
         
         ocultarIndicador();
         
-        if (!response.ok) {
-            throw new Error('Error en la respuesta del servidor');
-        }
+        if (!response.ok) throw new Error('Error en la respuesta del servidor');
         
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -569,7 +536,6 @@ async function procesarMensajeGeneral(mensaje) {
         
         while (true) {
             const { done, value } = await reader.read();
-            
             if (done) break;
             
             const chunk = decoder.decode(value);
@@ -594,9 +560,7 @@ async function procesarMensajeGeneral(mensaje) {
                             const messages = document.getElementById('chat-messages');
                             messages.scrollTop = messages.scrollHeight;
                         }
-                    } catch (e) {
-                        // Ignorar
-                    }
+                    } catch (e) { /* ignorar */ }
                 }
             }
         }
@@ -610,26 +574,32 @@ async function procesarMensajeGeneral(mensaje) {
     }
 }
 
+// ========================================
+// PROCESAR MENSAJE - MODO SOLO FUENTES
+// FIX: usa 'question' (no 'pregunta'), pasa 'history',
+//      lee 'data.answer' (no 'data.respuesta'),
+//      y avisa si no hay contexto de documento
+// ========================================
+
 async function procesarMensaje(mensaje) {
     updateProcessingStatus(true);
-    mostrarIndicador('DeepSeek v3 está pensando...');
+    mostrarIndicador('Consultando documentos...');
     
     try {
-        const fuentesActivas = sources.filter(s => activeSources.includes(s.id));
-        
+        // Si no hay sessionId todavía, procesar los documentos primero
         if (!sessionId) {
+            const fuentesActivas = sources.filter(s => activeSources.includes(s.id));
             await procesarDocumentos(fuentesActivas);
         }
         
         const response = await fetch('/chat', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                session_id: sessionId,
-                pregunta: mensaje,
-                historial: chatHistory
+                session_id: sessionId,          // puede ser null si procesarDocumentos falló
+                question: mensaje,              // ← CORREGIDO: era 'pregunta'
+                mode: chatMode,                 // ← AÑADIDO: enviar el modo actual
+                history: chatHistory.slice(-5)  // ← AÑADIDO: últimos 5 turnos
             })
         });
         
@@ -638,25 +608,32 @@ async function procesarMensaje(mensaje) {
         ocultarIndicador();
         updateProcessingStatus(false);
         
-        if (data.respuesta) {
-            agregarMensajeAsistente(data.respuesta, data.modelo || 'DeepSeek v3');
-            chatHistory.push({ pregunta: mensaje, respuesta: data.respuesta });
-            await guardarEnHistorial(mensaje, data.respuesta);
+        if (data.answer) {
+            // Avisar si el backend respondió sin contexto de documento
+            if (!data.has_context && chatMode === 'sources') {
+                agregarMensajeSistema(
+                    '⚠️ No hay documento procesado en esta sesión. ' +
+                    'Usa "Resumir" o "Analizar" primero para activar el contexto completo.'
+                );
+            }
+            
+            agregarMensajeAsistente(data.answer, 'DeepSeek v3');
+            chatHistory.push({ pregunta: mensaje, respuesta: data.answer });
+            await guardarEnHistorial(mensaje, data.answer);
+
         } else if (data.error) {
-            agregarMensajeSistema(`Error: ${data.error}`);
+            agregarMensajeSistema(`❌ Error: ${data.error}`);
         }
         
     } catch (error) {
         console.error('Error en chat:', error);
         ocultarIndicador();
         updateProcessingStatus(false);
-        agregarMensajeSistema('Error al conectar con el servidor');
+        agregarMensajeSistema('❌ Error al conectar con el servidor');
     }
 }
 
 async function procesarDocumentos(fuentes) {
-    // Esta función solo se usa internamente, no actualiza status
-    
     try {
         let contenidoCombinado = '';
         
@@ -683,8 +660,9 @@ async function procesarDocumentos(fuentes) {
         const doc = parser.parseFromString(html, 'text/html');
         const sessionInput = doc.getElementById('session-id');
         
-        if (sessionInput) {
+        if (sessionInput && sessionInput.value) {
             sessionId = sessionInput.value;
+            console.log('💾 Session ID obtenido:', sessionId);
         }
         
     } catch (error) {
@@ -716,7 +694,6 @@ async function ejecutarHerramienta(herramienta) {
     
     try {
         const fuentesActivas = sources.filter(s => activeSources.includes(s.id));
-        
         const formData = new FormData();
         
         const pdfSource = fuentesActivas.find(f => f.type === 'pdf');
@@ -726,9 +703,7 @@ async function ejecutarHerramienta(herramienta) {
         } else {
             let contenido = '';
             for (const fuente of fuentesActivas) {
-                if (fuente.content) {
-                    contenido += fuente.content + '\n\n';
-                }
+                if (fuente.content) contenido += fuente.content + '\n\n';
             }
             
             if (!contenido.trim()) {
@@ -744,13 +719,9 @@ async function ejecutarHerramienta(herramienta) {
         formData.append('modo', herramienta === 'resumir' ? 'general' : 'estudiar');
         formData.append('task', herramienta === 'flashcards' ? 'flashcards' : 'summary');
         
-        console.log(`🔧 Ejecutando: ${herramienta}, task: ${herramienta === 'flashcards' ? 'flashcards' : 'summary'}`);
-        
         const response = await fetch('/resumir', {
             method: 'POST',
-            headers: {
-                'Accept': 'application/json'
-            },
+            headers: { 'Accept': 'application/json' },
             body: formData
         });
         
@@ -758,21 +729,21 @@ async function ejecutarHerramienta(herramienta) {
         
         ocultarIndicador();
         updateProcessingStatus(false);
+
+        // Guardar session_id para que el chat tenga contexto
+        if (data.session_id) {
+            sessionId = data.session_id;
+            console.log('💾 Session ID actualizado tras herramienta:', sessionId);
+        }
         
         if (herramienta === 'flashcards' && data.flashcards) {
             mostrarFlashcardsVisuales(data.flashcards);
-            
-            const nombreOutput = 'Flashcards';
-            añadirOutput('flashcards', nombreOutput, data.flashcards);
+            añadirOutput('flashcards', 'Flashcards', data.flashcards);
             await guardarEnHistorial(mensaje, data.flashcards);
             
         } else if (data.resumen) {
             agregarMensajeAsistente(data.resumen, data.modelo || 'NXUS o.0.1');
-            
-            const nombreOutput = {
-                'resumir': 'Resumen ejecutivo',
-                'analizar': 'Análisis estructural'
-            };
+            const nombreOutput = { 'resumir': 'Resumen ejecutivo', 'analizar': 'Análisis estructural' };
             añadirOutput(herramienta, nombreOutput[herramienta] || 'Output', data.resumen);
             await guardarEnHistorial(mensaje, data.resumen);
             
@@ -795,7 +766,6 @@ async function ejecutarHerramienta(herramienta) {
 function parsearFlashcards(texto) {
     const cards = [];
     const lineas = texto.split('\n');
-    
     let currentCard = null;
     
     for (let linea of lineas) {
@@ -807,13 +777,9 @@ function parsearFlashcards(texto) {
             }
             currentCard = { pregunta: '', respuesta: '' };
         } else if (linea.startsWith('Pregunta:')) {
-            if (currentCard) {
-                currentCard.pregunta = linea.replace('Pregunta:', '').trim();
-            }
+            if (currentCard) currentCard.pregunta = linea.replace('Pregunta:', '').trim();
         } else if (linea.startsWith('Respuesta:')) {
-            if (currentCard) {
-                currentCard.respuesta = linea.replace('Respuesta:', '').trim();
-            }
+            if (currentCard) currentCard.respuesta = linea.replace('Respuesta:', '').trim();
         }
     }
     
@@ -844,7 +810,6 @@ function mostrarFlashcardsVisuales(flashcardsTexto) {
                 <button class="btn-export" onclick="exportarFlashcards()">📥 Exportar a Anki</button>
             </div>
         </div>
-        
         <div class="flashcard-viewer">
             <div class="flashcard" id="current-flashcard" onclick="flipCard()">
                 <div class="flashcard-inner">
@@ -858,7 +823,6 @@ function mostrarFlashcardsVisuales(flashcardsTexto) {
                     </div>
                 </div>
             </div>
-            
             <div class="flashcard-navigation">
                 <button class="btn-nav" onclick="previousCard()" id="prev-btn">← Anterior</button>
                 <span class="card-counter" id="card-counter">1 / ${currentFlashcards.length}</span>
@@ -869,7 +833,6 @@ function mostrarFlashcardsVisuales(flashcardsTexto) {
     
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
-    
     renderCurrentCard();
 }
 
@@ -881,16 +844,13 @@ function renderCurrentCard() {
     document.getElementById('card-back').textContent = card.respuesta;
     document.getElementById('card-counter').textContent = `${currentCardIndex + 1} / ${currentFlashcards.length}`;
     
-    const flashcard = document.getElementById('current-flashcard');
-    flashcard.classList.remove('flipped');
-    
+    document.getElementById('current-flashcard').classList.remove('flipped');
     document.getElementById('prev-btn').disabled = currentCardIndex === 0;
     document.getElementById('next-btn').disabled = currentCardIndex === currentFlashcards.length - 1;
 }
 
 function flipCard() {
-    const flashcard = document.getElementById('current-flashcard');
-    flashcard.classList.toggle('flipped');
+    document.getElementById('current-flashcard').classList.toggle('flipped');
 }
 
 function nextCard() {
@@ -909,7 +869,6 @@ function previousCard() {
 
 function exportarFlashcards() {
     let ankiText = '';
-    
     for (const card of currentFlashcards) {
         ankiText += `${card.pregunta}\t${card.respuesta}\n`;
     }
@@ -930,15 +889,11 @@ function exportarFlashcards() {
 // ========================================
 
 function añadirOutput(tipo, nombre, contenido) {
-    const output = {
+    toolOutputs.push({
         id: Date.now().toString(),
-        tipo: tipo,
-        nombre: nombre,
-        contenido: contenido,
+        tipo, nombre, contenido,
         timestamp: new Date()
-    };
-    
-    toolOutputs.push(output);
+    });
     renderOutputs();
 }
 
@@ -953,22 +908,15 @@ function renderOutputs() {
     
     outputSection.style.display = 'block';
     
-    const iconos = {
-        'resumir': '📝',
-        'flashcards': '🎴',
-        'analizar': '📊'
-    };
+    const iconos = { 'resumir': '📝', 'flashcards': '🎴', 'analizar': '📊' };
     
-    outputList.innerHTML = toolOutputs.slice(-5).reverse().map(output => {
-        const tiempo = formatTiempo(output.timestamp);
-        return `
-            <div class="output-item" onclick="verOutput('${output.id}')">
-                <span class="output-icon">${iconos[output.tipo] || '📄'}</span>
-                <span class="output-name">${output.nombre}</span>
-                <span class="output-time">${tiempo}</span>
-            </div>
-        `;
-    }).join('');
+    outputList.innerHTML = toolOutputs.slice(-5).reverse().map(output => `
+        <div class="output-item" onclick="verOutput('${output.id}')">
+            <span class="output-icon">${iconos[output.tipo] || '📄'}</span>
+            <span class="output-name">${output.nombre}</span>
+            <span class="output-time">${formatTiempo(output.timestamp)}</span>
+        </div>
+    `).join('');
 }
 
 function verOutput(outputId) {
@@ -983,9 +931,7 @@ function verOutput(outputId) {
 }
 
 function formatTiempo(timestamp) {
-    const ahora = new Date();
-    const diff = Math.floor((ahora - timestamp) / 1000);
-    
+    const diff = Math.floor((new Date() - timestamp) / 1000);
     if (diff < 60) return 'Ahora';
     if (diff < 3600) return `${Math.floor(diff / 60)}m`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
@@ -998,7 +944,6 @@ function formatTiempo(timestamp) {
 
 function agregarMensajeUsuario(texto) {
     const messages = document.getElementById('chat-messages');
-    
     const welcome = messages.querySelector('.welcome-message');
     if (welcome) welcome.remove();
     
@@ -1037,7 +982,6 @@ function crearMensajeAsistenteVacio(modelo = 'DeepSeek v3') {
     `;
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
-    
     return div;
 }
 
@@ -1074,9 +1018,7 @@ function mostrarIndicador(texto) {
 }
 
 function ocultarIndicador() {
-    const indicator = document.getElementById('processing-indicator');
-    indicator.style.display = 'none';
-    
+    document.getElementById('processing-indicator').style.display = 'none';
     const sendBtn = document.getElementById('send-btn');
     if (sendBtn) sendBtn.disabled = false;
 }
@@ -1113,17 +1055,12 @@ if (sessionInput && sessionInput.value) {
 }
 
 console.log('🎨 NUX IA v2.0 Glassmorphism cargado ✅');
+
 // ========================================
 // MOBILE ENHANCEMENTS
-// Añadir al final de app.js
 // ========================================
 
-// Detectar si es móvil
 const isMobile = window.innerWidth <= 768;
-
-// ========================================
-// GESTURES PARA CÁPSULAS EN MÓVIL
-// ========================================
 
 if (isMobile) {
     let touchStartY = 0;
@@ -1132,7 +1069,6 @@ if (isMobile) {
     const capsule = document.getElementById('capsule-sources');
     
     if (capsule) {
-        // Swipe up para abrir
         capsule.addEventListener('touchstart', (e) => {
             touchStartY = e.touches[0].clientY;
         }, { passive: true });
@@ -1145,68 +1081,40 @@ if (isMobile) {
         function handleSwipe() {
             const swipeDistance = touchStartY - touchEndY;
             const isExpanded = capsule.classList.contains('expanded');
-            
-            // Swipe up (>50px) para abrir
-            if (swipeDistance > 50 && !isExpanded) {
-                toggleCapsule('sources');
-            }
-            // Swipe down (>50px) para cerrar
-            else if (swipeDistance < -50 && isExpanded) {
-                toggleCapsule('sources');
-            }
+            if (swipeDistance > 50 && !isExpanded) toggleCapsule('sources');
+            else if (swipeDistance < -50 && isExpanded) toggleCapsule('sources');
         }
     }
     
-    // Cerrar cápsulas al tocar fuera
     document.addEventListener('touchstart', (e) => {
         const capsuleSources = document.getElementById('capsule-sources');
-        
         if (capsuleSources && capsuleSources.classList.contains('expanded')) {
-            if (!capsuleSources.contains(e.target)) {
-                toggleCapsule('sources');
-            }
+            if (!capsuleSources.contains(e.target)) toggleCapsule('sources');
         }
     });
 }
 
-// ========================================
-// AUTO-SCROLL EN CHAT MOBILE
-// ========================================
-
 function scrollToBottom() {
     const messages = document.getElementById('chat-messages');
     if (messages && isMobile) {
-        // Smooth scroll en móvil
-        messages.scrollTo({
-            top: messages.scrollHeight,
-            behavior: 'smooth'
-        });
+        messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' });
     }
 }
 
-// Llamar después de añadir mensajes
 const originalAgregarMensaje = agregarMensajeUsuario;
 agregarMensajeUsuario = function(texto) {
     originalAgregarMensaje(texto);
     setTimeout(scrollToBottom, 100);
 };
 
-// ========================================
-// KEYBOARD HANDLING EN MÓVIL
-// ========================================
-
 if (isMobile) {
     const chatInput = document.getElementById('chat-input');
-    
     if (chatInput) {
-        // Prevenir scroll al abrir teclado
         chatInput.addEventListener('focus', () => {
             setTimeout(() => {
                 chatInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }, 300);
         });
-        
-        // Cerrar cápsulas al abrir teclado
         chatInput.addEventListener('focus', () => {
             const capsuleSources = document.getElementById('capsule-sources');
             if (capsuleSources && capsuleSources.classList.contains('expanded')) {
@@ -1216,39 +1124,22 @@ if (isMobile) {
     }
 }
 
-// ========================================
-// OPTIMIZACIÓN DE PERFORMANCE EN MÓVIL
-// ========================================
-
 if (isMobile) {
-    // Throttle para resize
     let resizeTimeout;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
-            // Reinicializar iconos lucide después de resize
-            if (typeof lucide !== 'undefined') {
-                lucide.createIcons();
-            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }, 250);
     });
     
-    // Prevenir bounce en iOS
     document.body.addEventListener('touchmove', (e) => {
-        if (e.target.closest('.chat-messages') || 
-            e.target.closest('.sources-content') || 
-            e.target.closest('.tools-content')) {
-            // Permitir scroll en estos elementos
-            return;
-        }
-        // Prevenir en el resto
+        if (e.target.closest('.chat-messages') ||
+            e.target.closest('.sources-content') ||
+            e.target.closest('.tools-content')) return;
         e.preventDefault();
     }, { passive: false });
 }
-
-// ========================================
-// BOTTOM NAV MOBILE - ICONOS ACTUALIZADOS
-// ========================================
 
 function updateMobileBottomNav() {
     if (!isMobile) return;
@@ -1259,7 +1150,6 @@ function updateMobileBottomNav() {
     const collapsed = capsule.querySelector('.capsule-collapsed');
     if (!collapsed) return;
     
-    // Reemplazar contenido para móvil
     collapsed.innerHTML = `
         <div class="capsule-icon" onclick="toggleCapsule('sources')" title="Fuentes">
             <i data-lucide="folder-open"></i>
@@ -1275,51 +1165,27 @@ function updateMobileBottomNav() {
         </div>
     `;
     
-    // Reinicializar iconos
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-// Ejecutar al cargar
-if (isMobile) {
-    updateMobileBottomNav();
-}
+if (isMobile) updateMobileBottomNav();
 
-// ========================================
-// PREVENIR ZOOM ACCIDENTAL EN iOS
-// ========================================
-
-document.addEventListener('gesturestart', function(e) {
-    e.preventDefault();
-});
-
-document.addEventListener('gesturechange', function(e) {
-    e.preventDefault();
-});
-
-document.addEventListener('gestureend', function(e) {
-    e.preventDefault();
-});
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('gesturechange', (e) => e.preventDefault());
+document.addEventListener('gestureend', (e) => e.preventDefault());
 
 console.log('📱 Mobile enhancements loaded');
-
-/* ========================================
-   POMODORO TIMER - NUX IA
-   Añadir al final de app.js
-   ======================================== */
 
 // ========================================
 // POMODORO TIMER
 // ========================================
 
 let pomodoroInterval = null;
-let pomodoroSeconds = 25 * 60; // 25 minutos
-let pomodoroMode = 'work'; // 'work' o 'break'
+let pomodoroSeconds = 25 * 60;
+let pomodoroMode = 'work';
 let pomodoroSessions = 0;
 let isPomodoroRunning = false;
 
-// Cargar sesiones guardadas
 function loadPomodoroStats() {
     const stats = localStorage.getItem('pomodoro_stats');
     if (stats) {
@@ -1329,7 +1195,6 @@ function loadPomodoroStats() {
     }
 }
 
-// Guardar sesiones
 function savePomodoroStats() {
     localStorage.setItem('pomodoro_stats', JSON.stringify({
         sessions: pomodoroSessions,
@@ -1337,23 +1202,15 @@ function savePomodoroStats() {
     }));
 }
 
-// Toggle Pomodoro
 function togglePomodoro() {
     const widget = document.getElementById('pomodoro-widget');
-    if (!widget) {
-        createPomodoroWidget();
-    } else {
-        widget.classList.toggle('minimized');
-    }
+    if (!widget) createPomodoroWidget();
+    else widget.classList.toggle('minimized');
 }
 
-// Crear widget
 function createPomodoroWidget() {
-    // Eliminar si ya existe
     const existing = document.getElementById('pomodoro-widget');
-    if (existing) {
-        existing.remove();
-    }
+    if (existing) existing.remove();
     
     const widget = document.createElement('div');
     widget.id = 'pomodoro-widget';
@@ -1373,10 +1230,8 @@ function createPomodoroWidget() {
                 </button>
             </div>
         </div>
-        
         <div class="pomodoro-body">
             <div class="pomodoro-mode" id="pomodoro-mode">Tiempo de estudio</div>
-            
             <div class="pomodoro-circle">
                 <svg class="pomodoro-progress" viewBox="0 0 100 100">
                     <circle cx="50" cy="50" r="45" class="pomodoro-progress-bg"></circle>
@@ -1384,7 +1239,6 @@ function createPomodoroWidget() {
                 </svg>
                 <div class="pomodoro-time" id="pomodoro-time">25:00</div>
             </div>
-            
             <div class="pomodoro-controls">
                 <button onclick="startPomodoro()" class="pomodoro-btn primary" id="start-btn">
                     <i data-lucide="play" style="width:16px;height:16px;"></i>
@@ -1399,7 +1253,6 @@ function createPomodoroWidget() {
                     Reset
                 </button>
             </div>
-            
             <div class="pomodoro-stats">
                 <div class="stat-item">
                     <i data-lucide="check-circle" style="width:14px;height:14px;"></i>
@@ -1410,135 +1263,89 @@ function createPomodoroWidget() {
     `;
     
     document.body.appendChild(widget);
-    
-    // Inicializar iconos
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
-    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     loadPomodoroStats();
 }
 
-// Start
 function startPomodoro() {
     if (isPomodoroRunning) return;
-    
     isPomodoroRunning = true;
-    
     document.getElementById('start-btn').style.display = 'none';
     document.getElementById('pause-btn').style.display = 'flex';
-    
     pomodoroInterval = setInterval(() => {
         pomodoroSeconds--;
         updatePomodoroDisplay();
-        
-        if (pomodoroSeconds <= 0) {
-            finishPomodoro();
-        }
+        if (pomodoroSeconds <= 0) finishPomodoro();
     }, 1000);
 }
 
-// Pause
 function pausePomodoro() {
     isPomodoroRunning = false;
     clearInterval(pomodoroInterval);
-    
     document.getElementById('start-btn').style.display = 'flex';
     document.getElementById('pause-btn').style.display = 'none';
 }
 
-// Reset
 function resetPomodoro() {
     pausePomodoro();
-    
-    if (pomodoroMode === 'work') {
-        pomodoroSeconds = 25 * 60;
-    } else {
-        pomodoroSeconds = 5 * 60;
-    }
-    
+    pomodoroSeconds = pomodoroMode === 'work' ? 25 * 60 : 5 * 60;
     updatePomodoroDisplay();
 }
 
-// Finish
 function finishPomodoro() {
     pausePomodoro();
-    
-    // Reproducir sonido
     playPomodoroSound();
     
     if (pomodoroMode === 'work') {
-        // Completó sesión de trabajo
         pomodoroSessions++;
         savePomodoroStats();
         updatePomodoroStats();
-        
-        // Cambiar a descanso
         pomodoroMode = 'break';
         pomodoroSeconds = 5 * 60;
         document.getElementById('pomodoro-mode').textContent = '☕ Tiempo de descanso';
-        
-        // Notificación
         showPomodoroNotification('¡Sesión completada! 🎉', 'Toma un descanso de 5 minutos');
     } else {
-        // Completó descanso
         pomodoroMode = 'work';
         pomodoroSeconds = 25 * 60;
         document.getElementById('pomodoro-mode').textContent = '📚 Tiempo de estudio';
-        
         showPomodoroNotification('¡Descanso terminado! 💪', 'Volvamos al trabajo');
     }
-    
     updatePomodoroDisplay();
 }
 
-// Update display
 function updatePomodoroDisplay() {
     const minutes = Math.floor(pomodoroSeconds / 60);
     const seconds = pomodoroSeconds % 60;
+    document.getElementById('pomodoro-time').textContent =
+        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     
-    const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    document.getElementById('pomodoro-time').textContent = timeStr;
-    
-    // Update progress circle
     const totalSeconds = pomodoroMode === 'work' ? 25 * 60 : 5 * 60;
     const progress = ((totalSeconds - pomodoroSeconds) / totalSeconds) * 100;
-    
-    const circle = document.getElementById('pomodoro-progress');
     const circumference = 2 * Math.PI * 45;
     const offset = circumference - (progress / 100) * circumference;
-    
-    circle.style.strokeDashoffset = offset;
+    document.getElementById('pomodoro-progress').style.strokeDashoffset = offset;
 }
 
-// Update stats
 function updatePomodoroStats() {
-    document.getElementById('sessions-count').textContent = pomodoroSessions;
+    const el = document.getElementById('sessions-count');
+    if (el) el.textContent = pomodoroSessions;
 }
 
-// Sound
 function playPomodoroSound() {
-    // Crear tono simple con Web Audio API
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-    
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    
     oscillator.frequency.value = 800;
     oscillator.type = 'sine';
-    
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-    
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 0.5);
 }
 
-// Notification
 function showPomodoroNotification(title, message) {
-    // Crear notificación visual
     const notification = document.createElement('div');
     notification.className = 'pomodoro-notification';
     notification.innerHTML = `
@@ -1547,54 +1354,29 @@ function showPomodoroNotification(title, message) {
             <p>${message}</p>
         </div>
     `;
-    
     document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.classList.add('show');
-    }, 100);
-    
+    setTimeout(() => notification.classList.add('show'), 100);
     setTimeout(() => {
         notification.classList.remove('show');
         setTimeout(() => notification.remove(), 300);
     }, 3000);
     
-    // Notificación del navegador (si tiene permisos)
     if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, {
-            body: message,
-            icon: '/static/icon.png'
-        });
+        new Notification(title, { body: message, icon: '/static/icon.png' });
     }
 }
 
-// Minimize
 function minimizePomodoro() {
     document.getElementById('pomodoro-widget').classList.add('minimized');
 }
 
-// Close
 function closePomodoro() {
     pausePomodoro();
     document.getElementById('pomodoro-widget').remove();
 }
 
-// Request notification permission
-function requestNotificationPermission() {
-    if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-    }
-}
-
-// Initialize on load
 loadPomodoroStats();
-
 console.log('⏱️ Pomodoro Timer loaded');
-
-/* ========================================
-   MAPAS MENTALES - FRONTEND
-   Añadir al final de app.js
-   ======================================== */
 
 // ========================================
 // MINDMAP VIEWER
@@ -1602,12 +1384,10 @@ console.log('⏱️ Pomodoro Timer loaded');
 
 let currentMindmap = null;
 
-// Mostrar mapa mental
 function mostrarMapaMental(mermaidCode) {
     currentMindmap = mermaidCode;
     
     const messages = document.getElementById('chat-messages');
-    
     const div = document.createElement('div');
     div.className = 'mindmap-container';
     div.innerHTML = `
@@ -1615,31 +1395,25 @@ function mostrarMapaMental(mermaidCode) {
             <h3>🗺️ Mapa Mental Generado</h3>
             <div class="mindmap-controls">
                 <button class="btn-mindmap" onclick="zoomInMindmap()">
-                    <i data-lucide="zoom-in" style="width:16px;height:16px;"></i>
-                    Zoom +
+                    <i data-lucide="zoom-in" style="width:16px;height:16px;"></i> Zoom +
                 </button>
                 <button class="btn-mindmap" onclick="zoomOutMindmap()">
-                    <i data-lucide="zoom-out" style="width:16px;height:16px;"></i>
-                    Zoom -
+                    <i data-lucide="zoom-out" style="width:16px;height:16px;"></i> Zoom -
                 </button>
                 <button class="btn-mindmap" onclick="resetZoomMindmap()">
-                    <i data-lucide="maximize" style="width:16px;height:16px;"></i>
-                    Reset
+                    <i data-lucide="maximize" style="width:16px;height:16px;"></i> Reset
                 </button>
                 <button class="btn-mindmap primary" onclick="exportMindmap()">
-                    <i data-lucide="download" style="width:16px;height:16px;"></i>
-                    Exportar
+                    <i data-lucide="download" style="width:16px;height:16px;"></i> Exportar
                 </button>
             </div>
         </div>
-        
         <div class="mindmap-viewer" id="mindmap-viewer">
             <div class="mindmap-loading">
                 <div class="spinner"></div>
                 <p>Renderizando mapa mental...</p>
             </div>
         </div>
-        
         <div class="mindmap-footer">
             <p>💡 Tip: Usa los controles de zoom para explorar el mapa</p>
         </div>
@@ -1647,27 +1421,16 @@ function mostrarMapaMental(mermaidCode) {
     
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
-    
-    // Renderizar Mermaid
     renderMermaid(mermaidCode);
-    
-    // Reinicializar iconos
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-// Renderizar Mermaid
 async function renderMermaid(code) {
     const viewer = document.getElementById('mindmap-viewer');
     
     try {
-        // Inicializar Mermaid si no está
-        if (typeof mermaid === 'undefined') {
-            await loadMermaid();
-        }
+        if (typeof mermaid === 'undefined') await loadMermaid();
         
-        // Configurar Mermaid
         mermaid.initialize({
             startOnLoad: false,
             theme: document.body.classList.contains('dark') ? 'dark' : 'default',
@@ -1681,29 +1444,16 @@ async function renderMermaid(code) {
                 background: document.body.classList.contains('dark') ? '#1a1a2e' : '#ffffff',
                 mainBkg: document.body.classList.contains('dark') ? '#2a2a3e' : '#f8f9fb',
                 nodeBorder: '#de4cf5',
-                clusterBkg: document.body.classList.contains('dark') ? '#2a2a3e' : '#f8f9fb',
                 fontSize: '14px',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
             },
-            mindmap: {
-                padding: 20,
-                useMaxWidth: false
-            }
+            mindmap: { padding: 20, useMaxWidth: false }
         });
         
-        // Generar ID único
         const id = 'mermaid-' + Date.now();
-        
-        // Renderizar
         const { svg } = await mermaid.render(id, code);
         
-        viewer.innerHTML = `
-            <div class="mindmap-svg-container" id="svg-container">
-                ${svg}
-            </div>
-        `;
-        
-        // Hacer el mapa draggable
+        viewer.innerHTML = `<div class="mindmap-svg-container" id="svg-container">${svg}</div>`;
         makeMindmapDraggable();
         
     } catch (error) {
@@ -1713,26 +1463,16 @@ async function renderMermaid(code) {
                 <i data-lucide="alert-circle" style="width:48px;height:48px;color:#ef4444;"></i>
                 <h4>Error al renderizar mapa mental</h4>
                 <p>${error.message}</p>
-                <button class="btn-retry" onclick="renderMermaid(\`${code.replace(/`/g, '\\`')}\`)">
-                    Reintentar
-                </button>
+                <button class="btn-retry" onclick="renderMermaid(\`${code.replace(/`/g, '\\`')}\`)">Reintentar</button>
             </div>
         `;
-        
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 }
 
-// Cargar librería Mermaid
 function loadMermaid() {
     return new Promise((resolve, reject) => {
-        if (typeof mermaid !== 'undefined') {
-            resolve();
-            return;
-        }
-        
+        if (typeof mermaid !== 'undefined') { resolve(); return; }
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
         script.onload = resolve;
@@ -1741,34 +1481,16 @@ function loadMermaid() {
     });
 }
 
-// Zoom controls
 let currentZoom = 1;
 
-function zoomInMindmap() {
-    currentZoom += 0.2;
-    applyZoom();
-}
-
-function zoomOutMindmap() {
-    if (currentZoom > 0.4) {
-        currentZoom -= 0.2;
-        applyZoom();
-    }
-}
-
-function resetZoomMindmap() {
-    currentZoom = 1;
-    applyZoom();
-}
-
+function zoomInMindmap() { currentZoom += 0.2; applyZoom(); }
+function zoomOutMindmap() { if (currentZoom > 0.4) { currentZoom -= 0.2; applyZoom(); } }
+function resetZoomMindmap() { currentZoom = 1; applyZoom(); }
 function applyZoom() {
     const container = document.getElementById('svg-container');
-    if (container) {
-        container.style.transform = `scale(${currentZoom})`;
-    }
+    if (container) container.style.transform = `scale(${currentZoom})`;
 }
 
-// Draggable
 let isDragging = false;
 let startX, startY, scrollLeft, scrollTop;
 
@@ -1777,7 +1499,6 @@ function makeMindmapDraggable() {
     if (!viewer) return;
     
     viewer.style.cursor = 'grab';
-    
     viewer.addEventListener('mousedown', (e) => {
         isDragging = true;
         viewer.style.cursor = 'grabbing';
@@ -1786,63 +1507,39 @@ function makeMindmapDraggable() {
         scrollLeft = viewer.scrollLeft;
         scrollTop = viewer.scrollTop;
     });
-    
-    viewer.addEventListener('mouseleave', () => {
-        isDragging = false;
-        viewer.style.cursor = 'grab';
-    });
-    
-    viewer.addEventListener('mouseup', () => {
-        isDragging = false;
-        viewer.style.cursor = 'grab';
-    });
-    
+    viewer.addEventListener('mouseleave', () => { isDragging = false; viewer.style.cursor = 'grab'; });
+    viewer.addEventListener('mouseup', () => { isDragging = false; viewer.style.cursor = 'grab'; });
     viewer.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
         e.preventDefault();
         const x = e.pageX - viewer.offsetLeft;
         const y = e.pageY - viewer.offsetTop;
-        const walkX = (x - startX) * 2;
-        const walkY = (y - startY) * 2;
-        viewer.scrollLeft = scrollLeft - walkX;
-        viewer.scrollTop = scrollTop - walkY;
+        viewer.scrollLeft = scrollLeft - (x - startX) * 2;
+        viewer.scrollTop = scrollTop - (y - startY) * 2;
     });
 }
 
-// Exportar mapa
 async function exportMindmap() {
     try {
         const svg = document.querySelector('#svg-container svg');
-        if (!svg) {
-            alert('No hay mapa mental para exportar');
-            return;
-        }
+        if (!svg) { alert('No hay mapa mental para exportar'); return; }
         
-        // Obtener dimensiones
         const bbox = svg.getBBox();
         const width = bbox.width + 40;
         const height = bbox.height + 40;
-        
-        // Crear canvas
         const canvas = document.createElement('canvas');
-        canvas.width = width * 2; // 2x para mejor calidad
+        canvas.width = width * 2;
         canvas.height = height * 2;
         const ctx = canvas.getContext('2d');
-        
-        // Fondo
         ctx.fillStyle = document.body.classList.contains('dark') ? '#1a1a2e' : '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Convertir SVG a imagen
         const svgData = new XMLSerializer().serializeToString(svg);
         const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(svgBlob);
-        
         const img = new Image();
         img.onload = function() {
             ctx.drawImage(img, 20, 20, width * 2 - 40, height * 2 - 40);
-            
-            // Descargar
             canvas.toBlob(function(blob) {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -1851,20 +1548,16 @@ async function exportMindmap() {
                 a.click();
                 URL.revokeObjectURL(url);
             });
-            
             URL.revokeObjectURL(url);
         };
         img.src = url;
-        
         agregarMensajeSistema('📥 Mapa mental exportado como imagen PNG');
-        
     } catch (error) {
         console.error('Error exporting mindmap:', error);
         alert('Error al exportar mapa mental');
     }
 }
 
-// Integración con herramientas
 async function ejecutarHerramientaMindmap() {
     if (activeSources.length === 0) {
         agregarMensajeSistema('⚠️ Necesitas añadir documentos primero');
@@ -1872,13 +1565,11 @@ async function ejecutarHerramientaMindmap() {
     }
     
     agregarMensajeUsuario('🗺️ Genera un mapa mental del contenido');
-    
     updateProcessingStatus(true);
     mostrarIndicador('Generando mapa mental...');
     
     try {
         const fuentesActivas = sources.filter(s => activeSources.includes(s.id));
-        
         const formData = new FormData();
         
         const pdfSource = fuentesActivas.find(f => f.type === 'pdf');
@@ -1887,18 +1578,14 @@ async function ejecutarHerramientaMindmap() {
         } else {
             let contenido = '';
             for (const fuente of fuentesActivas) {
-                if (fuente.content) {
-                    contenido += fuente.content + '\n\n';
-                }
+                if (fuente.content) contenido += fuente.content + '\n\n';
             }
-            
             if (!contenido.trim()) {
                 ocultarIndicador();
                 updateProcessingStatus(false);
                 agregarMensajeSistema('⚠️ No hay contenido en las fuentes');
                 return;
             }
-            
             formData.append('texto', contenido);
         }
         
@@ -1907,14 +1594,11 @@ async function ejecutarHerramientaMindmap() {
         
         const response = await fetch('/resumir', {
             method: 'POST',
-            headers: {
-                'Accept': 'application/json'
-            },
+            headers: { 'Accept': 'application/json' },
             body: formData
         });
         
         const data = await response.json();
-        
         ocultarIndicador();
         updateProcessingStatus(false);
         
@@ -1935,11 +1619,6 @@ async function ejecutarHerramientaMindmap() {
 
 console.log('🗺️ Mindmap viewer loaded');
 
-/* ========================================
-   NOTAS Y HIGHLIGHTS - MEJORADO
-   Reemplazar en app.js
-   ======================================== */
-
 // ========================================
 // HIGHLIGHTS & NOTES SYSTEM
 // ========================================
@@ -1947,7 +1626,6 @@ console.log('🗺️ Mindmap viewer loaded');
 let highlights = [];
 let currentSelection = null;
 
-// Cargar highlights guardados
 function loadHighlights() {
     const saved = localStorage.getItem('nux_highlights');
     if (saved) {
@@ -1955,68 +1633,39 @@ function loadHighlights() {
             highlights = JSON.parse(saved);
             console.log('✅ Highlights cargados:', highlights.length);
         } catch (e) {
-            console.error('Error cargando highlights:', e);
             highlights = [];
         }
     }
 }
 
-// Guardar highlights
 function saveHighlights() {
     localStorage.setItem('nux_highlights', JSON.stringify(highlights));
     updateHighlightsBadge();
 }
 
-// Manejar selección de texto
 function handleTextSelection(e) {
-    // No mostrar menú si se clickeó en el menú mismo o en highlights
-    if (e.target.closest('.highlight-menu') || e.target.closest('.btn-highlights')) {
-        return;
-    }
+    if (e.target.closest('.highlight-menu') || e.target.closest('.btn-highlights')) return;
     
     const selection = window.getSelection();
     const selectedText = selection.toString().trim();
     
-    // Verificar que el texto esté en área válida
-    if (selectedText.length < 10) {
-        hideHighlightMenu();
-        return;
-    }
+    if (selectedText.length < 10) { hideHighlightMenu(); return; }
     
-    // Verificar que esté en área de mensajes o resumen
     const validContainer = selection.anchorNode?.parentElement?.closest('.chat-messages, .message-bubble, .resumen-content');
+    if (!validContainer) { hideHighlightMenu(); return; }
     
-    if (!validContainer) {
-        hideHighlightMenu();
-        return;
-    }
-    
-    currentSelection = {
-        text: selectedText,
-        anchorNode: selection.anchorNode,
-        anchorOffset: selection.anchorOffset,
-        focusNode: selection.focusNode,
-        focusOffset: selection.focusOffset
-    };
-    
+    currentSelection = { text: selectedText };
     showHighlightMenu(e.pageX, e.pageY);
 }
 
-// Mostrar menú de highlight
 function showHighlightMenu(x, y) {
     hideHighlightMenu();
     
     const menu = document.createElement('div');
     menu.id = 'highlight-menu';
     menu.className = 'highlight-menu';
-    
-    // Ajustar posición si está muy cerca del borde
-    const maxX = window.innerWidth - 250;
-    const maxY = window.innerHeight - 100;
-    
-    menu.style.left = Math.min(x, maxX) + 'px';
-    menu.style.top = Math.min(y + 10, maxY) + 'px';
-    
+    menu.style.left = Math.min(x, window.innerWidth - 250) + 'px';
+    menu.style.top = Math.min(y + 10, window.innerHeight - 100) + 'px';
     menu.innerHTML = `
         <div class="highlight-colors">
             <button class="highlight-btn yellow" onclick="addHighlight('yellow')" title="Amarillo">
@@ -2036,138 +1685,81 @@ function showHighlightMenu(x, y) {
             </button>
         </div>
     `;
-    
     document.body.appendChild(menu);
-    
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-// Ocultar menú
 function hideHighlightMenu() {
     const menu = document.getElementById('highlight-menu');
-    if (menu) {
-        menu.remove();
-    }
+    if (menu) menu.remove();
 }
 
-// Añadir highlight
 function addHighlight(color) {
-    if (!currentSelection) {
-        console.log('❌ No hay selección');
-        return;
-    }
+    if (!currentSelection) return;
     
-    const highlight = {
+    highlights.push({
         id: Date.now(),
         text: currentSelection.text,
-        color: color,
+        color,
         note: '',
         timestamp: new Date().toISOString()
-    };
-    
-    highlights.push(highlight);
+    });
     saveHighlights();
-    
-    console.log('✅ Highlight añadido:', highlight);
-    
     hideHighlightMenu();
     window.getSelection().removeAllRanges();
-    
-    // Mostrar feedback
     showHighlightFeedback(color);
     updateHighlightsPanel();
 }
 
-// Añadir highlight con nota
 function addHighlightWithNote() {
     if (!currentSelection) return;
-    
     hideHighlightMenu();
-    
     const note = prompt('Añade una nota (opcional):');
-    
-    const highlight = {
+    highlights.push({
         id: Date.now(),
         text: currentSelection.text,
         color: 'yellow',
         note: note || '',
         timestamp: new Date().toISOString()
-    };
-    
-    highlights.push(highlight);
+    });
     saveHighlights();
-    
-    console.log('✅ Highlight con nota añadido:', highlight);
-    
     window.getSelection().removeAllRanges();
     showHighlightFeedback('yellow');
     updateHighlightsPanel();
 }
 
-// Mostrar feedback visual
 function showHighlightFeedback(color) {
+    const colorNames = { yellow: '🟡 Amarillo', green: '🟢 Verde', blue: '🔵 Azul', red: '🔴 Rojo' };
     const feedback = document.createElement('div');
     feedback.className = 'highlight-feedback';
     feedback.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
+        position: fixed; top: 50%; left: 50%;
         transform: translate(-50%, -50%);
-        background: var(--panel-bg);
-        backdrop-filter: blur(12px);
-        border: 2px solid var(--primary);
-        border-radius: 12px;
-        padding: 20px 40px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-        z-index: 10001;
-        animation: fadeInOut 1.5s ease;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 12px;
+        background: var(--panel-bg); backdrop-filter: blur(12px);
+        border: 2px solid var(--primary); border-radius: 12px;
+        padding: 20px 40px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        z-index: 10001; animation: fadeInOut 1.5s ease;
+        font-weight: 600; display: flex; align-items: center; gap: 12px;
     `;
-    
-    const colorNames = {
-        yellow: '🟡 Amarillo',
-        green: '🟢 Verde',
-        blue: '🔵 Azul',
-        red: '🔴 Rojo'
-    };
-    
     feedback.innerHTML = `
         <i data-lucide="check-circle" style="width:24px;height:24px;color:var(--primary);"></i>
         <span>Highlight guardado: ${colorNames[color]}</span>
     `;
-    
     document.body.appendChild(feedback);
-    
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
-    
-    setTimeout(() => {
-        feedback.remove();
-    }, 1500);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    setTimeout(() => feedback.remove(), 1500);
 }
 
-// Panel de highlights
 function toggleHighlightsPanel() {
-    let panel = document.getElementById('highlights-panel');
-    
-    if (panel) {
-        panel.classList.toggle('open');
-    } else {
-        createHighlightsPanel();
-    }
+    const panel = document.getElementById('highlights-panel');
+    if (panel) panel.classList.toggle('open');
+    else createHighlightsPanel();
 }
 
 function createHighlightsPanel() {
     const panel = document.createElement('div');
     panel.id = 'highlights-panel';
     panel.className = 'highlights-panel open';
-    
     panel.innerHTML = `
         <div class="highlights-header">
             <h3>
@@ -2188,17 +1780,11 @@ function createHighlightsPanel() {
         </div>
         <div class="highlights-list" id="highlights-list"></div>
     `;
-    
     document.body.appendChild(panel);
-    
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
-    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     updateHighlightsPanel();
 }
 
-// Actualizar panel
 function updateHighlightsPanel() {
     const list = document.getElementById('highlights-list');
     if (!list) return;
@@ -2211,22 +1797,15 @@ function updateHighlightsPanel() {
                 <small>Selecciona texto para añadir</small>
             </div>
         `;
-        if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
-        }
+        if (typeof lucide !== 'undefined') lucide.createIcons();
         return;
     }
     
     const sorted = [...highlights].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    
     list.innerHTML = sorted.map(h => {
         const date = new Date(h.timestamp).toLocaleDateString('es-ES', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
-        
         return `
             <div class="highlight-item highlight-${h.color}">
                 <div class="highlight-text">${h.text}</div>
@@ -2243,17 +1822,12 @@ function updateHighlightsPanel() {
             </div>
         `;
     }).join('');
-    
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-// Editar nota
 function editHighlightNote(id) {
     const highlight = highlights.find(h => h.id === id);
     if (!highlight) return;
-    
     const newNote = prompt('Nota:', highlight.note);
     if (newNote !== null) {
         highlight.note = newNote;
@@ -2262,34 +1836,23 @@ function editHighlightNote(id) {
     }
 }
 
-// Eliminar highlight
 function deleteHighlight(id) {
     if (!confirm('¿Eliminar este highlight?')) return;
-    
     highlights = highlights.filter(h => h.id !== id);
     saveHighlights();
     updateHighlightsPanel();
 }
 
-// Exportar highlights
 function exportHighlights() {
-    if (highlights.length === 0) {
-        alert('No tienes highlights para exportar');
-        return;
-    }
+    if (highlights.length === 0) { alert('No tienes highlights para exportar'); return; }
     
     let text = '# MIS HIGHLIGHTS - NUX IA\n\n';
     text += `Exportado: ${new Date().toLocaleString('es-ES')}\n`;
-    text += `Total: ${highlights.length} highlights\n\n`;
-    text += '---\n\n';
-    
+    text += `Total: ${highlights.length} highlights\n\n---\n\n`;
     highlights.forEach((h, i) => {
         text += `## ${i + 1}. ${h.text}\n`;
-        if (h.note) {
-            text += `**Nota:** ${h.note}\n`;
-        }
-        text += `*Color: ${h.color}*\n`;
-        text += `*Fecha: ${new Date(h.timestamp).toLocaleString('es-ES')}*\n\n`;
+        if (h.note) text += `**Nota:** ${h.note}\n`;
+        text += `*Color: ${h.color}* | *Fecha: ${new Date(h.timestamp).toLocaleString('es-ES')}*\n\n`;
     });
     
     const blob = new Blob([text], { type: 'text/plain' });
@@ -2301,18 +1864,13 @@ function exportHighlights() {
     URL.revokeObjectURL(url);
 }
 
-// Borrar todos
 function clearAllHighlights() {
-    if (!confirm(`¿Borrar todos los ${highlights.length} highlights? Esta acción no se puede deshacer.`)) {
-        return;
-    }
-    
+    if (!confirm(`¿Borrar todos los ${highlights.length} highlights? Esta acción no se puede deshacer.`)) return;
     highlights = [];
     saveHighlights();
     updateHighlightsPanel();
 }
 
-// Actualizar badge
 function updateHighlightsBadge() {
     const badge = document.getElementById('highlights-badge');
     if (badge) {
@@ -2322,22 +1880,17 @@ function updateHighlightsBadge() {
     }
 }
 
-// Inicializar
 document.addEventListener('DOMContentLoaded', () => {
     loadHighlights();
     document.addEventListener('mouseup', handleTextSelection);
     updateHighlightsBadge();
 });
 
-// Cerrar menú al hacer scroll o click fuera
 document.addEventListener('scroll', hideHighlightMenu, true);
 document.addEventListener('mousedown', (e) => {
-    if (!e.target.closest('.highlight-menu')) {
-        hideHighlightMenu();
-    }
+    if (!e.target.closest('.highlight-menu')) hideHighlightMenu();
 });
 
-// Animación feedback
 const style = document.createElement('style');
 style.textContent = `
 @keyframes fadeInOut {
