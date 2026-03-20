@@ -255,7 +255,7 @@ async function autoProcessSource(source) {
         updateProcessingStatus(false);
 
         if (data.session_id) {
-            sessionId = data.session_id;
+            sessionId = String(data.session_id);
 
             // Marcar fuente como procesada
             source.processing = false;
@@ -768,7 +768,7 @@ async function ejecutarHerramienta(herramienta) {
         ocultarIndicador();
         updateProcessingStatus(false);
         if (data.session_id) {
-            sessionId = data.session_id;
+            sessionId = String(data.session_id);
             console.log('💾 Session ID actualizado tras herramienta:', sessionId);
         }
         if (herramienta === 'flashcards' && data.flashcards) {

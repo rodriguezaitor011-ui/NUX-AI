@@ -315,7 +315,15 @@ class ChatRequest(BaseModel):
     question: str
     session_id: Optional[str] = None
     mode: str = "sources"
-    history: Optional[List[Dict]] = []   # ← AÑADIDO: historial de conversación
+    history: Optional[List[Dict]] = []
+
+    @field_validator('session_id', mode='before')
+    @classmethod
+    def coerce_session_id(cls, v):
+        """Convierte session_id a string sea lo que sea (int, float, etc)"""
+        if v is None:
+            return None
+        return str(v)
 
 
 @router.post("/chat")
