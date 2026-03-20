@@ -59,22 +59,15 @@ document.addEventListener('keydown', function(e) {
 
 async function fetchWithAuth(url, options = {}) {
     const token = localStorage.getItem('auth_token');
-    
     const headers = { ...options.headers };
-    
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-    
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const response = await fetch(url, { ...options, headers });
-    
     if (response.status === 401) {
         console.warn('⚠️ Token expirado. Redirigiendo a login...');
         localStorage.removeItem('auth_token');
         localStorage.removeItem('refresh_token');
         window.location.href = '/login';
     }
-    
     return response;
 }
 
@@ -85,15 +78,11 @@ async function fetchWithAuth(url, options = {}) {
 async function guardarEnHistorial(mensaje, respuesta) {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
-    
     try {
         await fetchWithAuth('/save-chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: mensaje,
-                response: respuesta
-            })
+            body: JSON.stringify({ message: mensaje, response: respuesta })
         });
     } catch (err) {
         console.error('Error guardando en historial:', err);
@@ -116,14 +105,11 @@ if (localStorage.getItem('dark-mode') === 'true') {
 
 function cambiarModoChat(modo) {
     chatMode = modo;
-    
     const subtitle = document.getElementById('chat-subtitle');
     const input = document.getElementById('chat-input');
-    
     if (modo === 'sources') {
         subtitle.textContent = 'Powered by DeepSeek v3 • Respondiendo solo con tus fuentes';
         input.placeholder = 'Pregunta sobre tus documentos...';
-        
         if (activeSources.length === 0) {
             agregarMensajeSistema('📚 Modo: Solo fuentes. Añade documentos para empezar.');
         }
@@ -141,39 +127,58 @@ function cambiarModoChat(modo) {
 function addSource(input) {
     const file = input.files[0];
     if (!file) return;
-    
     if (file.size > 10 * 1024 * 1024) {
         alert('El archivo es demasiado grande. Máximo 10MB.');
         input.value = '';
         return;
     }
-    
     mostrarRenameModal(file);
     input.value = '';
 }
 
+// ========================================
+// RENDER SOURCES — con estado de procesado
+// ========================================
+
 function renderSources() {
     const sourcesList = document.getElementById('sources-list');
     const emptyState = document.getElementById('empty-sources');
-    
+
     if (sources.length === 0) {
         emptyState.style.display = 'block';
         sourcesList.innerHTML = '';
         return;
     }
-    
+
     emptyState.style.display = 'none';
-    
+
     sourcesList.innerHTML = sources.map(source => `
-        <div class="source-item ${source.active ? 'active' : ''}" onclick="toggleSource('${source.id}')">
+        <div class="source-item ${source.active ? 'active' : ''}" 
+             onclick="toggleSource('${source.id}')">
             <div class="source-header">
                 <div class="source-name">
-                    <span class="source-icon">${source.type === 'pdf' ? '📄' : '📝'}</span>
+                    <span class="source-icon">
+                        ${source.processed 
+                            ? '✅' 
+                            : source.processing 
+                                ? '⏳' 
+                                : source.type === 'pdf' ? '📄' : '📝'
+                        }
+                    </span>
                     ${source.name}
                 </div>
-                <button class="source-remove" onclick="event.stopPropagation(); removeSource('${source.id}')">✕</button>
+                <button class="source-remove" 
+                        onclick="event.stopPropagation(); removeSource('${source.id}')">✕</button>
             </div>
-            <div class="source-meta">${source.size} • ${source.active ? 'Activo' : 'Inactivo'}</div>
+            <div class="source-meta">
+                ${source.size} • 
+                ${source.processed 
+                    ? '<span style="color:#10b981;font-weight:600">✓ Listo para preguntas</span>'
+                    : source.processing 
+                        ? '<span style="color:var(--primary)">Procesando...</span>'
+                        : '<span style="color:var(--muted)">Pendiente</span>'
+                }
+            </div>
         </div>
     `).join('');
 }
@@ -181,15 +186,12 @@ function renderSources() {
 function toggleSource(sourceId) {
     const source = sources.find(s => s.id === sourceId);
     if (!source) return;
-    
     source.active = !source.active;
-    
     if (source.active) {
         activeSources.push(sourceId);
     } else {
         activeSources = activeSources.filter(id => id !== sourceId);
     }
-    
     renderSources();
 }
 
@@ -197,7 +199,6 @@ function removeSource(sourceId) {
     sources = sources.filter(s => s.id !== sourceId);
     activeSources = activeSources.filter(id => id !== sourceId);
     renderSources();
-    
     if (sources.length === 0) {
         agregarMensajeSistema('No quedan fuentes activas. Añade documentos para continuar.');
     }
@@ -210,24 +211,100 @@ function formatFileSize(bytes) {
 }
 
 // ========================================
+// AUTO-PROCESAR DOCUMENTO AL AÑADIR
+// Como NotebookLM — sin pasos extra
+// ========================================
+
+async function autoProcessSource(source) {
+    // Marcar como procesando
+    source.processing = true;
+    source.processed = false;
+    renderSources();
+
+    // Quitar el welcome message si existe
+    const welcome = document.getElementById('chat-messages')?.querySelector('.welcome-message');
+    if (welcome) welcome.remove();
+
+    agregarMensajeSistema(`⏳ Analizando "${source.name}"...`);
+    updateProcessingStatus(true);
+    mostrarIndicador(`Procesando "${source.name}"...`);
+
+    try {
+        const formData = new FormData();
+
+        if (source.type === 'pdf' && source.file) {
+            formData.append('archivo', source.file);
+        } else if (source.content) {
+            formData.append('texto', source.content);
+        } else {
+            throw new Error('No hay contenido para procesar');
+        }
+
+        formData.append('modo', 'general');
+        formData.append('task', 'summary');
+
+        const response = await fetch('/resumir', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' },
+            body: formData
+        });
+
+        const data = await response.json();
+
+        ocultarIndicador();
+        updateProcessingStatus(false);
+
+        if (data.session_id) {
+            sessionId = data.session_id;
+
+            // Marcar fuente como procesada
+            source.processing = false;
+            source.processed = true;
+            renderSources();
+
+            agregarMensajeSistema(
+                `✅ "${source.name}" listo. Puedes hacer preguntas sobre él.`
+            );
+
+            // Mostrar resumen automáticamente en el chat
+            if (data.resumen) {
+                agregarMensajeAsistente(data.resumen, 'NXUS o.0.1');
+                añadirOutput('resumir', `Resumen — ${source.name}`, data.resumen);
+            }
+
+        } else if (data.error) {
+            source.processing = false;
+            source.processed = false;
+            renderSources();
+            agregarMensajeSistema(`❌ Error procesando "${source.name}": ${data.error}`);
+        }
+
+    } catch (error) {
+        console.error('Error en autoProcess:', error);
+        source.processing = false;
+        source.processed = false;
+        renderSources();
+        ocultarIndicador();
+        updateProcessingStatus(false);
+        agregarMensajeSistema(`❌ Error al procesar "${source.name}". Intenta usar el botón Resumir manualmente.`);
+    }
+}
+
+// ========================================
 // MODAL: Renombrar archivo
 // ========================================
 
 function mostrarRenameModal(file) {
     pendingFile = file;
-    
     const modal = document.getElementById('rename-modal');
     const input = document.getElementById('rename-input');
     const filenameDiv = document.getElementById('original-filename');
-    
     const nombreSinExtension = file.name.replace(/\.[^/.]+$/, '');
     input.value = nombreSinExtension;
     filenameDiv.textContent = `Archivo original: ${file.name}`;
-    
     modal.classList.add('active');
     input.focus();
     input.select();
-    
     input.onkeypress = function(e) {
         if (e.key === 'Enter') confirmarRename();
     };
@@ -238,17 +315,17 @@ function cerrarRenameModal() {
     pendingFile = null;
 }
 
+// ← MODIFICADO: auto-procesa al confirmar
 function confirmarRename() {
     const input = document.getElementById('rename-input');
     const nuevoNombre = input.value.trim();
-    
+
     if (!nuevoNombre) {
         alert('Por favor, ingresa un nombre para el documento');
         return;
     }
-    
     if (!pendingFile) return;
-    
+
     const sourceId = Date.now().toString();
     const source = {
         id: sourceId,
@@ -257,27 +334,29 @@ function confirmarRename() {
         type: pendingFile.name.endsWith('.pdf') ? 'pdf' : 'txt',
         size: formatFileSize(pendingFile.size),
         active: true,
+        processed: false,
+        processing: false,
         file: pendingFile,
         content: null
     };
-    
+
     sources.push(source);
     activeSources.push(sourceId);
     renderSources();
-    
+    cerrarRenameModal();
+
     if (pendingFile.name.endsWith('.txt')) {
         const reader = new FileReader();
         reader.onload = function(e) {
             source.content = e.target.result;
-            console.log(`📄 ${nuevoNombre} cargado: ${source.content.length} caracteres`);
-            agregarMensajeSistema(`📄 ${nuevoNombre} añadido (${source.size})`);
+            // ← AUTO-PROCESAR
+            autoProcessSource(source);
         };
         reader.readAsText(pendingFile);
     } else if (pendingFile.name.endsWith('.pdf')) {
-        agregarMensajeSistema(`📄 ${nuevoNombre} añadido - se procesará al usar herramientas`);
+        // ← AUTO-PROCESAR
+        autoProcessSource(source);
     }
-    
-    cerrarRenameModal();
 }
 
 // ========================================
@@ -288,10 +367,8 @@ function mostrarPasteModal() {
     const modal = document.getElementById('paste-modal');
     const nameInput = document.getElementById('paste-name-input');
     const contentInput = document.getElementById('paste-content');
-    
     nameInput.value = '';
     contentInput.value = '';
-    
     modal.classList.add('active');
     nameInput.focus();
 }
@@ -300,30 +377,28 @@ function cerrarPasteModal() {
     document.getElementById('paste-modal').classList.remove('active');
 }
 
+// ← MODIFICADO: auto-procesa al confirmar
 async function confirmarPaste() {
     const nameInput = document.getElementById('paste-name-input');
     const contentInput = document.getElementById('paste-content');
-    
     const nombre = nameInput.value.trim();
     const contenido = contentInput.value.trim();
-    
+
     if (!nombre) {
         alert('Por favor, ingresa un nombre para el documento');
         return;
     }
-    
     if (!contenido) {
         alert('Por favor, pega el texto o enlace');
         return;
     }
-    
+
     const esURL = contenido.startsWith('http://') || contenido.startsWith('https://');
-    
     if (esURL) {
-        agregarMensajeSistema('⚠️ Extracción de enlaces aún no implementada. Pega el texto directamente por ahora.');
+        agregarMensajeSistema('⚠️ Extracción de enlaces aún no implementada. Pega el texto directamente.');
         return;
     }
-    
+
     const sourceId = Date.now().toString();
     const source = {
         id: sourceId,
@@ -331,16 +406,19 @@ async function confirmarPaste() {
         type: 'txt',
         size: formatFileSize(contenido.length),
         active: true,
+        processed: false,
+        processing: false,
         file: null,
         content: contenido
     };
-    
+
     sources.push(source);
     activeSources.push(sourceId);
     renderSources();
-    
-    agregarMensajeSistema(`📄 ${nombre} añadido (${source.size})`);
     cerrarPasteModal();
+
+    // ← AUTO-PROCESAR
+    autoProcessSource(source);
 }
 
 // Cerrar modales con click fuera
@@ -365,7 +443,6 @@ function mostrarOCRModal() {
     const errDiv = document.getElementById('ocr-error');
     const submitBtn = document.getElementById('ocr-submit-btn');
     const fileInput = document.getElementById('ocr-file');
-
     pendingOCRFile = null;
     fileInput.value = '';
     previewWrap.style.display = 'none';
@@ -373,7 +450,6 @@ function mostrarOCRModal() {
     errDiv.style.display = 'none';
     errDiv.textContent = '';
     submitBtn.disabled = true;
-
     modal.classList.add('active');
     setTimeout(() => lucide.createIcons(), 100);
 }
@@ -390,17 +466,14 @@ function onOCRFileSelect(input) {
     const filenameEl = document.getElementById('ocr-filename');
     const submitBtn = document.getElementById('ocr-submit-btn');
     const errDiv = document.getElementById('ocr-error');
-
     errDiv.style.display = 'none';
     errDiv.textContent = '';
-
     if (!file) {
         previewWrap.style.display = 'none';
         submitBtn.disabled = true;
         pendingOCRFile = null;
         return;
     }
-
     const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!validTypes.includes(file.type)) {
         errDiv.textContent = 'Formato no permitido. Usa JPG, PNG, WebP o GIF.';
@@ -409,7 +482,6 @@ function onOCRFileSelect(input) {
         pendingOCRFile = null;
         return;
     }
-
     const maxMb = 10;
     if (file.size > maxMb * 1024 * 1024) {
         errDiv.textContent = 'La imagen es demasiado grande. Máximo ' + maxMb + ' MB.';
@@ -418,7 +490,6 @@ function onOCRFileSelect(input) {
         pendingOCRFile = null;
         return;
     }
-
     pendingOCRFile = file;
     filenameEl.textContent = file.name + ' (' + formatFileSize(file.size) + ')';
     preview.src = URL.createObjectURL(file);
@@ -427,13 +498,12 @@ function onOCRFileSelect(input) {
     submitBtn.disabled = false;
 }
 
+// ← MODIFICADO: auto-procesa tras OCR
 async function confirmarOCR() {
     if (!pendingOCRFile) return;
-
     const loading = document.getElementById('ocr-loading');
     const errDiv = document.getElementById('ocr-error');
     const submitBtn = document.getElementById('ocr-submit-btn');
-
     errDiv.style.display = 'none';
     errDiv.textContent = '';
     loading.style.display = 'block';
@@ -442,14 +512,11 @@ async function confirmarOCR() {
     try {
         const formData = new FormData();
         formData.append('image', pendingOCRFile);
-
         const response = await fetch('/api/ocr-image', {
             method: 'POST',
             body: formData
         });
-
         const data = await response.json().catch(() => ({}));
-
         if (!response.ok) throw new Error(data.error || 'Error al extraer el texto');
         if (!data.text || !data.text.trim()) throw new Error('No se detectó texto en la imagen');
 
@@ -463,6 +530,8 @@ async function confirmarOCR() {
             type: 'txt',
             size: formatFileSize(data.text.length),
             active: true,
+            processed: false,
+            processing: false,
             file: null,
             content: data.text.trim()
         };
@@ -470,9 +539,11 @@ async function confirmarOCR() {
         sources.push(source);
         activeSources.push(sourceId);
         renderSources();
-
-        agregarMensajeSistema('Apuntes escaneados añadidos. Ya puedes usar Resumir o Flashcards.');
         cerrarOCRModal();
+
+        // ← AUTO-PROCESAR
+        autoProcessSource(source);
+
     } catch (err) {
         errDiv.textContent = err.message || 'Error al procesar la imagen';
         errDiv.style.display = 'block';
@@ -490,18 +561,23 @@ async function confirmarOCR() {
 function enviarMensaje() {
     const input = document.getElementById('chat-input');
     const mensaje = input.value.trim();
-    
     if (!mensaje) return;
-    
+
     if (chatMode === 'sources' && activeSources.length === 0) {
         agregarMensajeSistema('⚠️ Añade al menos un documento antes de hacer preguntas en modo "Solo fuentes"');
         return;
     }
-    
+
+    // Bloquear si hay documentos procesándose
+    if (chatMode === 'sources' && sources.some(s => s.processing)) {
+        agregarMensajeSistema('⏳ Espera a que termine de procesar el documento...');
+        return;
+    }
+
     agregarMensajeUsuario(mensaje);
     input.value = '';
     autoResize(input);
-    
+
     if (chatMode === 'sources') {
         procesarMensaje(mensaje);
     } else {
@@ -512,46 +588,33 @@ function enviarMensaje() {
 async function procesarMensajeGeneral(mensaje) {
     updateProcessingStatus(true);
     mostrarIndicador('DeepSeek v3 está pensando...');
-    
     const messageDiv = crearMensajeAsistenteVacio('DeepSeek v3');
     const contentDiv = messageDiv.querySelector('.message-content');
-    
     try {
         const response = await fetch('/chat-general-stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                pregunta: mensaje,
-                historial: chatHistory
-            })
+            body: JSON.stringify({ pregunta: mensaje, historial: chatHistory })
         });
-        
         ocultarIndicador();
-        
         if (!response.ok) throw new Error('Error en la respuesta del servidor');
-        
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let respuestaCompleta = '';
-        
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            
             const chunk = decoder.decode(value);
             const lines = chunk.split('\n');
-            
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     const data = line.slice(6);
-                    
                     if (data === '[DONE]') {
                         chatHistory.push({ pregunta: mensaje, respuesta: respuestaCompleta });
                         await guardarEnHistorial(mensaje, respuestaCompleta);
                         updateProcessingStatus(false);
                         return;
                     }
-                    
                     try {
                         const json = JSON.parse(data);
                         if (json.content) {
@@ -564,7 +627,6 @@ async function procesarMensajeGeneral(mensaje) {
                 }
             }
         }
-        
     } catch (error) {
         console.error('Error en chat general:', error);
         ocultarIndicador();
@@ -574,57 +636,54 @@ async function procesarMensajeGeneral(mensaje) {
     }
 }
 
-// ========================================
-// PROCESAR MENSAJE - MODO SOLO FUENTES
-// FIX: usa 'question' (no 'pregunta'), pasa 'history',
-//      lee 'data.answer' (no 'data.respuesta'),
-//      y avisa si no hay contexto de documento
-// ========================================
-
 async function procesarMensaje(mensaje) {
     updateProcessingStatus(true);
     mostrarIndicador('Consultando documentos...');
-    
+
     try {
-        // Si no hay sessionId todavía, procesar los documentos primero
+        // Si no hay sessionId y hay fuentes sin procesar, avisar
         if (!sessionId) {
-            const fuentesActivas = sources.filter(s => activeSources.includes(s.id));
-            await procesarDocumentos(fuentesActivas);
+            const fuentesSinProcesar = sources.filter(s => activeSources.includes(s.id) && !s.processed);
+            if (fuentesSinProcesar.length > 0) {
+                ocultarIndicador();
+                updateProcessingStatus(false);
+                agregarMensajeSistema(
+                    '⚠️ Los documentos aún no están listos. ' +
+                    'Espera a que terminen de procesarse o usa el botón "Resumir".'
+                );
+                return;
+            }
         }
-        
+
         const response = await fetch('/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                session_id: sessionId,          // puede ser null si procesarDocumentos falló
-                question: mensaje,              // ← CORREGIDO: era 'pregunta'
-                mode: chatMode,                 // ← AÑADIDO: enviar el modo actual
-                history: chatHistory.slice(-5)  // ← AÑADIDO: últimos 5 turnos
+                session_id: sessionId,
+                question: mensaje,
+                mode: chatMode,
+                history: chatHistory.slice(-5)
             })
         });
-        
+
         const data = await response.json();
-        
         ocultarIndicador();
         updateProcessingStatus(false);
-        
+
         if (data.answer) {
-            // Avisar si el backend respondió sin contexto de documento
             if (!data.has_context && chatMode === 'sources') {
                 agregarMensajeSistema(
-                    '⚠️ No hay documento procesado en esta sesión. ' +
-                    'Usa "Resumir" o "Analizar" primero para activar el contexto completo.'
+                    '⚠️ Respondo con conocimiento general porque no hay contexto cargado. ' +
+                    'Usa "Resumir" para activarlo.'
                 );
             }
-            
             agregarMensajeAsistente(data.answer, 'DeepSeek v3');
             chatHistory.push({ pregunta: mensaje, respuesta: data.answer });
             await guardarEnHistorial(mensaje, data.answer);
-
         } else if (data.error) {
             agregarMensajeSistema(`❌ Error: ${data.error}`);
         }
-        
+
     } catch (error) {
         console.error('Error en chat:', error);
         ocultarIndicador();
@@ -636,7 +695,6 @@ async function procesarMensaje(mensaje) {
 async function procesarDocumentos(fuentes) {
     try {
         let contenidoCombinado = '';
-        
         for (const fuente of fuentes) {
             if (fuente.type === 'pdf') {
                 contenidoCombinado += `[PDF: ${fuente.name}]\n\n`;
@@ -644,27 +702,19 @@ async function procesarDocumentos(fuentes) {
                 contenidoCombinado += fuente.content + '\n\n';
             }
         }
-        
         const formData = new FormData();
         formData.append('texto', contenidoCombinado);
         formData.append('modo', 'general');
         formData.append('task', 'summary');
-        
-        const response = await fetch('/resumir', {
-            method: 'POST',
-            body: formData
-        });
-        
+        const response = await fetch('/resumir', { method: 'POST', body: formData });
         const html = await response.text();
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         const sessionInput = doc.getElementById('session-id');
-        
         if (sessionInput && sessionInput.value) {
             sessionId = sessionInput.value;
             console.log('💾 Session ID obtenido:', sessionId);
         }
-        
     } catch (error) {
         console.error('Error procesando documentos:', error);
     }
@@ -679,78 +729,60 @@ async function ejecutarHerramienta(herramienta) {
         agregarMensajeSistema('⚠️ Necesitas añadir documentos primero');
         return;
     }
-    
     const mensajesHerramienta = {
         'resumir': '📝 Genera un resumen ejecutivo de los documentos',
         'flashcards': '🎴 Crea flashcards para estudiar',
         'analizar': '📊 Analiza la estructura y conceptos clave'
     };
-    
     const mensaje = mensajesHerramienta[herramienta] || `Ejecutar: ${herramienta}`;
     agregarMensajeUsuario(mensaje);
-    
     updateProcessingStatus(true);
     mostrarIndicador(`Ejecutando ${herramienta}...`);
-    
     try {
         const fuentesActivas = sources.filter(s => activeSources.includes(s.id));
         const formData = new FormData();
-        
         const pdfSource = fuentesActivas.find(f => f.type === 'pdf');
         if (pdfSource && pdfSource.file) {
             formData.append('archivo', pdfSource.file);
-            console.log(`📄 Enviando PDF: ${pdfSource.name}`);
         } else {
             let contenido = '';
             for (const fuente of fuentesActivas) {
                 if (fuente.content) contenido += fuente.content + '\n\n';
             }
-            
             if (!contenido.trim()) {
                 ocultarIndicador();
                 updateProcessingStatus(false);
                 agregarMensajeSistema('⚠️ No hay contenido en las fuentes');
                 return;
             }
-            
             formData.append('texto', contenido);
         }
-        
         formData.append('modo', herramienta === 'resumir' ? 'general' : 'estudiar');
         formData.append('task', herramienta === 'flashcards' ? 'flashcards' : 'summary');
-        
         const response = await fetch('/resumir', {
             method: 'POST',
             headers: { 'Accept': 'application/json' },
             body: formData
         });
-        
         const data = await response.json();
-        
         ocultarIndicador();
         updateProcessingStatus(false);
-
-        // Guardar session_id para que el chat tenga contexto
         if (data.session_id) {
             sessionId = data.session_id;
             console.log('💾 Session ID actualizado tras herramienta:', sessionId);
         }
-        
         if (herramienta === 'flashcards' && data.flashcards) {
             mostrarFlashcardsVisuales(data.flashcards);
             añadirOutput('flashcards', 'Flashcards', data.flashcards);
             await guardarEnHistorial(mensaje, data.flashcards);
-            
         } else if (data.resumen) {
             agregarMensajeAsistente(data.resumen, data.modelo || 'NXUS o.0.1');
             const nombreOutput = { 'resumir': 'Resumen ejecutivo', 'analizar': 'Análisis estructural' };
             añadirOutput(herramienta, nombreOutput[herramienta] || 'Output', data.resumen);
             await guardarEnHistorial(mensaje, data.resumen);
-            
         } else if (data.error) {
             agregarMensajeSistema(`Error: ${data.error}`);
         }
-        
     } catch (error) {
         console.error('Error ejecutando herramienta:', error);
         ocultarIndicador();
@@ -767,10 +799,8 @@ function parsearFlashcards(texto) {
     const cards = [];
     const lineas = texto.split('\n');
     let currentCard = null;
-    
     for (let linea of lineas) {
         linea = linea.trim();
-        
         if (linea.startsWith('TARJETA') || linea.match(/^\d+\./)) {
             if (currentCard && currentCard.pregunta && currentCard.respuesta) {
                 cards.push(currentCard);
@@ -782,25 +812,20 @@ function parsearFlashcards(texto) {
             if (currentCard) currentCard.respuesta = linea.replace('Respuesta:', '').trim();
         }
     }
-    
     if (currentCard && currentCard.pregunta && currentCard.respuesta) {
         cards.push(currentCard);
     }
-    
     return cards;
 }
 
 function mostrarFlashcardsVisuales(flashcardsTexto) {
     currentFlashcards = parsearFlashcards(flashcardsTexto);
     currentCardIndex = 0;
-    
     if (currentFlashcards.length === 0) {
         agregarMensajeSistema('No se pudieron generar flashcards');
         return;
     }
-    
     const messages = document.getElementById('chat-messages');
-    
     const div = document.createElement('div');
     div.className = 'flashcards-container';
     div.innerHTML = `
@@ -830,7 +855,6 @@ function mostrarFlashcardsVisuales(flashcardsTexto) {
             </div>
         </div>
     `;
-    
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
     renderCurrentCard();
@@ -838,12 +862,10 @@ function mostrarFlashcardsVisuales(flashcardsTexto) {
 
 function renderCurrentCard() {
     if (currentFlashcards.length === 0) return;
-    
     const card = currentFlashcards[currentCardIndex];
     document.getElementById('card-front').textContent = card.pregunta;
     document.getElementById('card-back').textContent = card.respuesta;
     document.getElementById('card-counter').textContent = `${currentCardIndex + 1} / ${currentFlashcards.length}`;
-    
     document.getElementById('current-flashcard').classList.remove('flipped');
     document.getElementById('prev-btn').disabled = currentCardIndex === 0;
     document.getElementById('next-btn').disabled = currentCardIndex === currentFlashcards.length - 1;
@@ -872,7 +894,6 @@ function exportarFlashcards() {
     for (const card of currentFlashcards) {
         ankiText += `${card.pregunta}\t${card.respuesta}\n`;
     }
-    
     const blob = new Blob([ankiText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -880,7 +901,6 @@ function exportarFlashcards() {
     a.download = 'flashcards_anki.txt';
     a.click();
     URL.revokeObjectURL(url);
-    
     agregarMensajeSistema('📥 Flashcards exportadas. Importa el archivo en Anki con formato: Texto separado por tabuladores');
 }
 
@@ -900,16 +920,12 @@ function añadirOutput(tipo, nombre, contenido) {
 function renderOutputs() {
     const outputSection = document.getElementById('tool-outputs');
     const outputList = document.getElementById('output-list');
-    
     if (toolOutputs.length === 0) {
         outputSection.style.display = 'none';
         return;
     }
-    
     outputSection.style.display = 'block';
-    
     const iconos = { 'resumir': '📝', 'flashcards': '🎴', 'analizar': '📊' };
-    
     outputList.innerHTML = toolOutputs.slice(-5).reverse().map(output => `
         <div class="output-item" onclick="verOutput('${output.id}')">
             <span class="output-icon">${iconos[output.tipo] || '📄'}</span>
@@ -922,7 +938,6 @@ function renderOutputs() {
 function verOutput(outputId) {
     const output = toolOutputs.find(o => o.id === outputId);
     if (!output) return;
-    
     if (output.tipo === 'flashcards') {
         mostrarFlashcardsVisuales(output.contenido);
     } else {
@@ -946,7 +961,6 @@ function agregarMensajeUsuario(texto) {
     const messages = document.getElementById('chat-messages');
     const welcome = messages.querySelector('.welcome-message');
     if (welcome) welcome.remove();
-    
     const div = document.createElement('div');
     div.className = 'chat-message user';
     div.innerHTML = `<div class="message-bubble">${escapeHtml(texto)}</div>`;
@@ -956,7 +970,6 @@ function agregarMensajeUsuario(texto) {
 
 function agregarMensajeAsistente(texto, modelo = 'DeepSeek v3') {
     const messages = document.getElementById('chat-messages');
-    
     const div = document.createElement('div');
     div.className = 'chat-message assistant';
     div.innerHTML = `
@@ -971,7 +984,6 @@ function agregarMensajeAsistente(texto, modelo = 'DeepSeek v3') {
 
 function crearMensajeAsistenteVacio(modelo = 'DeepSeek v3') {
     const messages = document.getElementById('chat-messages');
-    
     const div = document.createElement('div');
     div.className = 'chat-message assistant';
     div.innerHTML = `
@@ -987,7 +999,6 @@ function crearMensajeAsistenteVacio(modelo = 'DeepSeek v3') {
 
 function agregarMensajeSistema(texto) {
     const messages = document.getElementById('chat-messages');
-    
     const div = document.createElement('div');
     div.className = 'chat-message system';
     div.innerHTML = `<div class="message-bubble" style="background: rgba(255,255,255,0.05); font-size: 13px; color: var(--muted);">${escapeHtml(texto)}</div>`;
@@ -997,7 +1008,14 @@ function agregarMensajeSistema(texto) {
 
 function limpiarChat() {
     const messages = document.getElementById('chat-messages');
-    messages.innerHTML = '<div class="welcome-message"><div class="welcome-icon">👋</div><h3>Nueva conversación</h3></div>';
+    messages.innerHTML = `
+        <div class="welcome-message">
+            <div class="welcome-icon">👋</div>
+            <h3>Nueva conversación</h3>
+            <p style="color:var(--muted);font-size:14px;margin-top:8px">
+                Sube un documento y lo analizaré automáticamente
+            </p>
+        </div>`;
     chatHistory = [];
     sessionId = null;
 }
@@ -1009,10 +1027,8 @@ function limpiarChat() {
 function mostrarIndicador(texto) {
     const indicator = document.getElementById('processing-indicator');
     const indicatorText = document.getElementById('processing-text');
-    
     indicatorText.textContent = texto;
     indicator.style.display = 'flex';
-    
     const sendBtn = document.getElementById('send-btn');
     if (sendBtn) sendBtn.disabled = true;
 }
@@ -1040,9 +1056,7 @@ function autoResize(textarea) {
 
 const chatInput = document.getElementById('chat-input');
 if (chatInput) {
-    chatInput.addEventListener('input', function() {
-        autoResize(this);
-    });
+    chatInput.addEventListener('input', function() { autoResize(this); });
 }
 
 // ========================================
@@ -1065,19 +1079,15 @@ const isMobile = window.innerWidth <= 768;
 if (isMobile) {
     let touchStartY = 0;
     let touchEndY = 0;
-    
     const capsule = document.getElementById('capsule-sources');
-    
     if (capsule) {
         capsule.addEventListener('touchstart', (e) => {
             touchStartY = e.touches[0].clientY;
         }, { passive: true });
-        
         capsule.addEventListener('touchend', (e) => {
             touchEndY = e.changedTouches[0].clientY;
             handleSwipe();
         }, { passive: true });
-        
         function handleSwipe() {
             const swipeDistance = touchStartY - touchEndY;
             const isExpanded = capsule.classList.contains('expanded');
@@ -1085,7 +1095,6 @@ if (isMobile) {
             else if (swipeDistance < -50 && isExpanded) toggleCapsule('sources');
         }
     }
-    
     document.addEventListener('touchstart', (e) => {
         const capsuleSources = document.getElementById('capsule-sources');
         if (capsuleSources && capsuleSources.classList.contains('expanded')) {
@@ -1122,9 +1131,6 @@ if (isMobile) {
             }
         });
     }
-}
-
-if (isMobile) {
     let resizeTimeout;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimeout);
@@ -1132,7 +1138,6 @@ if (isMobile) {
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }, 250);
     });
-    
     document.body.addEventListener('touchmove', (e) => {
         if (e.target.closest('.chat-messages') ||
             e.target.closest('.sources-content') ||
@@ -1143,13 +1148,10 @@ if (isMobile) {
 
 function updateMobileBottomNav() {
     if (!isMobile) return;
-    
     const capsule = document.getElementById('capsule-sources');
     if (!capsule) return;
-    
     const collapsed = capsule.querySelector('.capsule-collapsed');
     if (!collapsed) return;
-    
     collapsed.innerHTML = `
         <div class="capsule-icon" onclick="toggleCapsule('sources')" title="Fuentes">
             <i data-lucide="folder-open"></i>
@@ -1164,7 +1166,6 @@ function updateMobileBottomNav() {
             <i data-lucide="bar-chart-3"></i>
         </div>
     `;
-    
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -1211,7 +1212,6 @@ function togglePomodoro() {
 function createPomodoroWidget() {
     const existing = document.getElementById('pomodoro-widget');
     if (existing) existing.remove();
-    
     const widget = document.createElement('div');
     widget.id = 'pomodoro-widget';
     widget.className = 'pomodoro-widget';
@@ -1261,7 +1261,6 @@ function createPomodoroWidget() {
             </div>
         </div>
     `;
-    
     document.body.appendChild(widget);
     if (typeof lucide !== 'undefined') lucide.createIcons();
     loadPomodoroStats();
@@ -1295,7 +1294,6 @@ function resetPomodoro() {
 function finishPomodoro() {
     pausePomodoro();
     playPomodoroSound();
-    
     if (pomodoroMode === 'work') {
         pomodoroSessions++;
         savePomodoroStats();
@@ -1318,7 +1316,6 @@ function updatePomodoroDisplay() {
     const seconds = pomodoroSeconds % 60;
     document.getElementById('pomodoro-time').textContent =
         `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    
     const totalSeconds = pomodoroMode === 'work' ? 25 * 60 : 5 * 60;
     const progress = ((totalSeconds - pomodoroSeconds) / totalSeconds) * 100;
     const circumference = 2 * Math.PI * 45;
@@ -1360,7 +1357,6 @@ function showPomodoroNotification(title, message) {
         notification.classList.remove('show');
         setTimeout(() => notification.remove(), 300);
     }, 3000);
-    
     if ('Notification' in window && Notification.permission === 'granted') {
         new Notification(title, { body: message, icon: '/static/icon.png' });
     }
@@ -1386,7 +1382,6 @@ let currentMindmap = null;
 
 function mostrarMapaMental(mermaidCode) {
     currentMindmap = mermaidCode;
-    
     const messages = document.getElementById('chat-messages');
     const div = document.createElement('div');
     div.className = 'mindmap-container';
@@ -1418,7 +1413,6 @@ function mostrarMapaMental(mermaidCode) {
             <p>💡 Tip: Usa los controles de zoom para explorar el mapa</p>
         </div>
     `;
-    
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
     renderMermaid(mermaidCode);
@@ -1427,10 +1421,8 @@ function mostrarMapaMental(mermaidCode) {
 
 async function renderMermaid(code) {
     const viewer = document.getElementById('mindmap-viewer');
-    
     try {
         if (typeof mermaid === 'undefined') await loadMermaid();
-        
         mermaid.initialize({
             startOnLoad: false,
             theme: document.body.classList.contains('dark') ? 'dark' : 'default',
@@ -1449,13 +1441,10 @@ async function renderMermaid(code) {
             },
             mindmap: { padding: 20, useMaxWidth: false }
         });
-        
         const id = 'mermaid-' + Date.now();
         const { svg } = await mermaid.render(id, code);
-        
         viewer.innerHTML = `<div class="mindmap-svg-container" id="svg-container">${svg}</div>`;
         makeMindmapDraggable();
-        
     } catch (error) {
         console.error('Error rendering mermaid:', error);
         viewer.innerHTML = `
@@ -1482,7 +1471,6 @@ function loadMermaid() {
 }
 
 let currentZoom = 1;
-
 function zoomInMindmap() { currentZoom += 0.2; applyZoom(); }
 function zoomOutMindmap() { if (currentZoom > 0.4) { currentZoom -= 0.2; applyZoom(); } }
 function resetZoomMindmap() { currentZoom = 1; applyZoom(); }
@@ -1497,7 +1485,6 @@ let startX, startY, scrollLeft, scrollTop;
 function makeMindmapDraggable() {
     const viewer = document.getElementById('mindmap-viewer');
     if (!viewer) return;
-    
     viewer.style.cursor = 'grab';
     viewer.addEventListener('mousedown', (e) => {
         isDragging = true;
@@ -1523,7 +1510,6 @@ async function exportMindmap() {
     try {
         const svg = document.querySelector('#svg-container svg');
         if (!svg) { alert('No hay mapa mental para exportar'); return; }
-        
         const bbox = svg.getBBox();
         const width = bbox.width + 40;
         const height = bbox.height + 40;
@@ -1533,7 +1519,6 @@ async function exportMindmap() {
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = document.body.classList.contains('dark') ? '#1a1a2e' : '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
         const svgData = new XMLSerializer().serializeToString(svg);
         const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(svgBlob);
@@ -1563,15 +1548,12 @@ async function ejecutarHerramientaMindmap() {
         agregarMensajeSistema('⚠️ Necesitas añadir documentos primero');
         return;
     }
-    
     agregarMensajeUsuario('🗺️ Genera un mapa mental del contenido');
     updateProcessingStatus(true);
     mostrarIndicador('Generando mapa mental...');
-    
     try {
         const fuentesActivas = sources.filter(s => activeSources.includes(s.id));
         const formData = new FormData();
-        
         const pdfSource = fuentesActivas.find(f => f.type === 'pdf');
         if (pdfSource && pdfSource.file) {
             formData.append('archivo', pdfSource.file);
@@ -1588,27 +1570,22 @@ async function ejecutarHerramientaMindmap() {
             }
             formData.append('texto', contenido);
         }
-        
         formData.append('modo', 'general');
         formData.append('task', 'mindmap');
-        
         const response = await fetch('/resumir', {
             method: 'POST',
             headers: { 'Accept': 'application/json' },
             body: formData
         });
-        
         const data = await response.json();
         ocultarIndicador();
         updateProcessingStatus(false);
-        
         if (data.mindmap) {
             mostrarMapaMental(data.mindmap);
             añadirOutput('mindmap', 'Mapa Mental', data.mindmap);
         } else if (data.error) {
             agregarMensajeSistema(`Error: ${data.error}`);
         }
-        
     } catch (error) {
         console.error('Error generando mapa mental:', error);
         ocultarIndicador();
@@ -1645,22 +1622,17 @@ function saveHighlights() {
 
 function handleTextSelection(e) {
     if (e.target.closest('.highlight-menu') || e.target.closest('.btn-highlights')) return;
-    
     const selection = window.getSelection();
     const selectedText = selection.toString().trim();
-    
     if (selectedText.length < 10) { hideHighlightMenu(); return; }
-    
     const validContainer = selection.anchorNode?.parentElement?.closest('.chat-messages, .message-bubble, .resumen-content');
     if (!validContainer) { hideHighlightMenu(); return; }
-    
     currentSelection = { text: selectedText };
     showHighlightMenu(e.pageX, e.pageY);
 }
 
 function showHighlightMenu(x, y) {
     hideHighlightMenu();
-    
     const menu = document.createElement('div');
     menu.id = 'highlight-menu';
     menu.className = 'highlight-menu';
@@ -1696,7 +1668,6 @@ function hideHighlightMenu() {
 
 function addHighlight(color) {
     if (!currentSelection) return;
-    
     highlights.push({
         id: Date.now(),
         text: currentSelection.text,
@@ -1788,7 +1759,6 @@ function createHighlightsPanel() {
 function updateHighlightsPanel() {
     const list = document.getElementById('highlights-list');
     if (!list) return;
-    
     if (highlights.length === 0) {
         list.innerHTML = `
             <div class="empty-highlights">
@@ -1800,7 +1770,6 @@ function updateHighlightsPanel() {
         if (typeof lucide !== 'undefined') lucide.createIcons();
         return;
     }
-    
     const sorted = [...highlights].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     list.innerHTML = sorted.map(h => {
         const date = new Date(h.timestamp).toLocaleDateString('es-ES', {
@@ -1845,7 +1814,6 @@ function deleteHighlight(id) {
 
 function exportHighlights() {
     if (highlights.length === 0) { alert('No tienes highlights para exportar'); return; }
-    
     let text = '# MIS HIGHLIGHTS - NUX IA\n\n';
     text += `Exportado: ${new Date().toLocaleString('es-ES')}\n`;
     text += `Total: ${highlights.length} highlights\n\n---\n\n`;
@@ -1854,7 +1822,6 @@ function exportHighlights() {
         if (h.note) text += `**Nota:** ${h.note}\n`;
         text += `*Color: ${h.color}* | *Fecha: ${new Date(h.timestamp).toLocaleString('es-ES')}*\n\n`;
     });
-    
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
