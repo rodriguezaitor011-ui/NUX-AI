@@ -24,7 +24,6 @@ function updateProcessingStatus(processing) {
     isProcessing = processing;
     const statusLeft = document.getElementById('status-left');
     const statusRight = document.getElementById('status-right');
-    
     if (processing) {
         statusLeft?.classList.add('active');
         statusRight?.classList.add('active');
@@ -43,13 +42,10 @@ function toggleCapsule(side) {
     capsule?.classList.toggle('expanded');
 }
 
-// Cerrar cápsulas con ESC
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
-        const sources = document.getElementById('capsule-sources');
-        const tools = document.getElementById('capsule-tools');
-        sources?.classList.remove('expanded');
-        tools?.classList.remove('expanded');
+        document.getElementById('capsule-sources')?.classList.remove('expanded');
+        document.getElementById('capsule-tools')?.classList.remove('expanded');
     }
 });
 
@@ -94,7 +90,6 @@ function toggleDark() {
     document.body.classList.toggle('dark');
     localStorage.setItem('dark-mode', document.body.classList.contains('dark'));
 }
-
 if (localStorage.getItem('dark-mode') === 'true') {
     document.body.classList.add('dark');
 }
@@ -136,46 +131,39 @@ function addSource(input) {
     input.value = '';
 }
 
-// ========================================
-// RENDER SOURCES — con estado de procesado
-// ========================================
-
 function renderSources() {
     const sourcesList = document.getElementById('sources-list');
     const emptyState = document.getElementById('empty-sources');
-
     if (sources.length === 0) {
         emptyState.style.display = 'block';
         sourcesList.innerHTML = '';
         return;
     }
-
     emptyState.style.display = 'none';
-
     sourcesList.innerHTML = sources.map(source => `
-        <div class="source-item ${source.active ? 'active' : ''}" 
+        <div class="source-item ${source.active ? 'active' : ''}"
              onclick="toggleSource('${source.id}')">
             <div class="source-header">
                 <div class="source-name">
                     <span class="source-icon">
-                        ${source.processed 
-                            ? '✅' 
-                            : source.processing 
-                                ? '⏳' 
+                        ${source.processed
+                            ? '✅'
+                            : source.processing
+                                ? '⏳'
                                 : source.type === 'pdf' ? '📄' : '📝'
                         }
                     </span>
                     ${source.name}
                 </div>
-                <button class="source-remove" 
+                <button class="source-remove"
                         onclick="event.stopPropagation(); removeSource('${source.id}')">✕</button>
             </div>
             <div class="source-meta">
-                ${source.size} • 
-                ${source.processed 
+                ${source.size} •
+                ${source.processed
                     ? '<span style="color:#10b981;font-weight:600">✓ Listo para preguntas</span>'
-                    : source.processing 
-                        ? '<span style="color:var(--primary)">Procesando...</span>'
+                    : source.processing
+                        ? '<span style="color:var(--primary)">Analizando...</span>'
                         : '<span style="color:var(--muted)">Pendiente</span>'
                 }
             </div>
@@ -200,6 +188,7 @@ function removeSource(sourceId) {
     activeSources = activeSources.filter(id => id !== sourceId);
     renderSources();
     if (sources.length === 0) {
+        sessionId = null;
         agregarMensajeSistema('No quedan fuentes activas. Añade documentos para continuar.');
     }
 }
@@ -221,9 +210,18 @@ async function autoProcessSource(source) {
     source.processed = false;
     renderSources();
 
-    // Quitar el welcome message si existe
+    // Quitar welcome message
     const welcome = document.getElementById('chat-messages')?.querySelector('.welcome-message');
     if (welcome) welcome.remove();
+
+    // Deshabilitar input mientras procesa
+    const chatInputEl = document.getElementById('chat-input');
+    const sendBtnEl = document.getElementById('send-btn');
+    if (chatInputEl) {
+        chatInputEl.placeholder = '⏳ Analizando documento...';
+        chatInputEl.disabled = true;
+    }
+    if (sendBtnEl) sendBtnEl.disabled = true;
 
     agregarMensajeSistema(`⏳ Analizando "${source.name}"...`);
     updateProcessingStatus(true);
@@ -255,28 +253,35 @@ async function autoProcessSource(source) {
         updateProcessingStatus(false);
 
         if (data.session_id) {
+            // ← CRÍTICO: guardar como string
             sessionId = String(data.session_id);
+            console.log('💾 sessionId guardado:', sessionId);
 
-            // Marcar fuente como procesada
             source.processing = false;
             source.processed = true;
             renderSources();
 
+            // Rehabilitar input
+            if (chatInputEl) {
+                chatInputEl.placeholder = 'Pregunta sobre tus documentos...';
+                chatInputEl.disabled = false;
+            }
+            if (sendBtnEl) sendBtnEl.disabled = false;
+
             agregarMensajeSistema(
-                `✅ "${source.name}" listo. Puedes hacer preguntas sobre él.`
+                `✅ "${source.name}" listo. Ya puedes hacer preguntas sobre él.`
             );
 
-            // Mostrar resumen automáticamente en el chat
+            // Mostrar resumen automáticamente
             if (data.resumen) {
                 agregarMensajeAsistente(data.resumen, 'NXUS o.0.1');
                 añadirOutput('resumir', `Resumen — ${source.name}`, data.resumen);
             }
 
         } else if (data.error) {
-            source.processing = false;
-            source.processed = false;
-            renderSources();
-            agregarMensajeSistema(`❌ Error procesando "${source.name}": ${data.error}`);
+            throw new Error(data.error);
+        } else {
+            throw new Error('No se recibió session_id del servidor');
         }
 
     } catch (error) {
@@ -286,7 +291,18 @@ async function autoProcessSource(source) {
         renderSources();
         ocultarIndicador();
         updateProcessingStatus(false);
-        agregarMensajeSistema(`❌ Error al procesar "${source.name}". Intenta usar el botón Resumir manualmente.`);
+
+        // Rehabilitar input aunque haya error
+        if (chatInputEl) {
+            chatInputEl.placeholder = 'Pregunta sobre tus documentos...';
+            chatInputEl.disabled = false;
+        }
+        if (sendBtnEl) sendBtnEl.disabled = false;
+
+        agregarMensajeSistema(
+            `❌ Error procesando "${source.name}": ${error.message}. ` +
+            `Puedes intentar usar el botón "Resumir" manualmente.`
+        );
     }
 }
 
@@ -315,11 +331,9 @@ function cerrarRenameModal() {
     pendingFile = null;
 }
 
-// ← MODIFICADO: auto-procesa al confirmar
 function confirmarRename() {
     const input = document.getElementById('rename-input');
     const nuevoNombre = input.value.trim();
-
     if (!nuevoNombre) {
         alert('Por favor, ingresa un nombre para el documento');
         return;
@@ -349,12 +363,10 @@ function confirmarRename() {
         const reader = new FileReader();
         reader.onload = function(e) {
             source.content = e.target.result;
-            // ← AUTO-PROCESAR
             autoProcessSource(source);
         };
         reader.readAsText(pendingFile);
     } else if (pendingFile.name.endsWith('.pdf')) {
-        // ← AUTO-PROCESAR
         autoProcessSource(source);
     }
 }
@@ -365,37 +377,26 @@ function confirmarRename() {
 
 function mostrarPasteModal() {
     const modal = document.getElementById('paste-modal');
-    const nameInput = document.getElementById('paste-name-input');
-    const contentInput = document.getElementById('paste-content');
-    nameInput.value = '';
-    contentInput.value = '';
+    document.getElementById('paste-name-input').value = '';
+    document.getElementById('paste-content').value = '';
     modal.classList.add('active');
-    nameInput.focus();
+    document.getElementById('paste-name-input').focus();
 }
 
 function cerrarPasteModal() {
     document.getElementById('paste-modal').classList.remove('active');
 }
 
-// ← MODIFICADO: auto-procesa al confirmar
 async function confirmarPaste() {
-    const nameInput = document.getElementById('paste-name-input');
-    const contentInput = document.getElementById('paste-content');
-    const nombre = nameInput.value.trim();
-    const contenido = contentInput.value.trim();
+    const nombre = document.getElementById('paste-name-input').value.trim();
+    const contenido = document.getElementById('paste-content').value.trim();
 
-    if (!nombre) {
-        alert('Por favor, ingresa un nombre para el documento');
-        return;
-    }
-    if (!contenido) {
-        alert('Por favor, pega el texto o enlace');
-        return;
-    }
+    if (!nombre) { alert('Por favor, ingresa un nombre para el documento'); return; }
+    if (!contenido) { alert('Por favor, pega el texto'); return; }
 
     const esURL = contenido.startsWith('http://') || contenido.startsWith('https://');
     if (esURL) {
-        agregarMensajeSistema('⚠️ Extracción de enlaces aún no implementada. Pega el texto directamente.');
+        agregarMensajeSistema('⚠️ Extracción de enlaces no implementada aún. Pega el texto directamente.');
         return;
     }
 
@@ -416,8 +417,6 @@ async function confirmarPaste() {
     activeSources.push(sourceId);
     renderSources();
     cerrarPasteModal();
-
-    // ← AUTO-PROCESAR
     autoProcessSource(source);
 }
 
@@ -482,9 +481,8 @@ function onOCRFileSelect(input) {
         pendingOCRFile = null;
         return;
     }
-    const maxMb = 10;
-    if (file.size > maxMb * 1024 * 1024) {
-        errDiv.textContent = 'La imagen es demasiado grande. Máximo ' + maxMb + ' MB.';
+    if (file.size > 10 * 1024 * 1024) {
+        errDiv.textContent = 'La imagen es demasiado grande. Máximo 10 MB.';
         errDiv.style.display = 'block';
         submitBtn.disabled = true;
         pendingOCRFile = null;
@@ -498,7 +496,6 @@ function onOCRFileSelect(input) {
     submitBtn.disabled = false;
 }
 
-// ← MODIFICADO: auto-procesa tras OCR
 async function confirmarOCR() {
     if (!pendingOCRFile) return;
     const loading = document.getElementById('ocr-loading');
@@ -512,10 +509,7 @@ async function confirmarOCR() {
     try {
         const formData = new FormData();
         formData.append('image', pendingOCRFile);
-        const response = await fetch('/api/ocr-image', {
-            method: 'POST',
-            body: formData
-        });
+        const response = await fetch('/api/ocr-image', { method: 'POST', body: formData });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Error al extraer el texto');
         if (!data.text || !data.text.trim()) throw new Error('No se detectó texto en la imagen');
@@ -526,7 +520,7 @@ async function confirmarOCR() {
         });
         const source = {
             id: sourceId,
-            name: name,
+            name,
             type: 'txt',
             size: formatFileSize(data.text.length),
             active: true,
@@ -540,14 +534,11 @@ async function confirmarOCR() {
         activeSources.push(sourceId);
         renderSources();
         cerrarOCRModal();
-
-        // ← AUTO-PROCESAR
         autoProcessSource(source);
 
     } catch (err) {
         errDiv.textContent = err.message || 'Error al procesar la imagen';
         errDiv.style.display = 'block';
-        submitBtn.disabled = true;
     } finally {
         loading.style.display = 'none';
         if (pendingOCRFile) submitBtn.disabled = false;
@@ -555,7 +546,7 @@ async function confirmarOCR() {
 }
 
 // ========================================
-// CHAT
+// CHAT — enviar mensaje
 // ========================================
 
 function enviarMensaje() {
@@ -563,14 +554,24 @@ function enviarMensaje() {
     const mensaje = input.value.trim();
     if (!mensaje) return;
 
-    if (chatMode === 'sources' && activeSources.length === 0) {
-        agregarMensajeSistema('⚠️ Añade al menos un documento antes de hacer preguntas en modo "Solo fuentes"');
+    // Sin documentos en modo fuentes
+    if (chatMode === 'sources' && sources.length === 0) {
+        agregarMensajeSistema('⚠️ Añade un documento primero usando el panel izquierdo.');
         return;
     }
 
-    // Bloquear si hay documentos procesándose
+    // Documento procesándose
     if (chatMode === 'sources' && sources.some(s => s.processing)) {
-        agregarMensajeSistema('⏳ Espera a que termine de procesar el documento...');
+        agregarMensajeSistema('⏳ Espera a que termine de analizar el documento...');
+        return;
+    }
+
+    // Sin sessionId — documento no procesado aún
+    if (chatMode === 'sources' && !sessionId) {
+        agregarMensajeSistema(
+            '⚠️ El documento aún no está listo. ' +
+            'Espera a que aparezca ✅ en el panel izquierdo.'
+        );
         return;
     }
 
@@ -584,6 +585,10 @@ function enviarMensaje() {
         procesarMensajeGeneral(mensaje);
     }
 }
+
+// ========================================
+// CHAT — modo general con streaming
+// ========================================
 
 async function procesarMensajeGeneral(mensaje) {
     updateProcessingStatus(true);
@@ -620,8 +625,7 @@ async function procesarMensajeGeneral(mensaje) {
                         if (json.content) {
                             respuestaCompleta += json.content;
                             contentDiv.innerHTML = marked.parse(respuestaCompleta);
-                            const messages = document.getElementById('chat-messages');
-                            messages.scrollTop = messages.scrollHeight;
+                            document.getElementById('chat-messages').scrollTop = 999999;
                         }
                     } catch (e) { /* ignorar */ }
                 }
@@ -632,28 +636,20 @@ async function procesarMensajeGeneral(mensaje) {
         ocultarIndicador();
         updateProcessingStatus(false);
         messageDiv.remove();
-        agregarMensajeSistema('Error al conectar con el servidor');
+        agregarMensajeSistema('❌ Error al conectar con el servidor');
     }
 }
+
+// ========================================
+// CHAT — modo solo fuentes
+// ========================================
 
 async function procesarMensaje(mensaje) {
     updateProcessingStatus(true);
     mostrarIndicador('Consultando documentos...');
 
     try {
-        // Si no hay sessionId y hay fuentes sin procesar, avisar
-        if (!sessionId) {
-            const fuentesSinProcesar = sources.filter(s => activeSources.includes(s.id) && !s.processed);
-            if (fuentesSinProcesar.length > 0) {
-                ocultarIndicador();
-                updateProcessingStatus(false);
-                agregarMensajeSistema(
-                    '⚠️ Los documentos aún no están listos. ' +
-                    'Espera a que terminen de procesarse o usa el botón "Resumir".'
-                );
-                return;
-            }
-        }
+        console.log('📤 Enviando chat | sessionId:', sessionId, '| mode:', chatMode);
 
         const response = await fetch('/chat', {
             method: 'POST',
@@ -670,13 +666,9 @@ async function procesarMensaje(mensaje) {
         ocultarIndicador();
         updateProcessingStatus(false);
 
+        console.log('📥 Respuesta chat:', data);
+
         if (data.answer) {
-            if (!data.has_context && chatMode === 'sources') {
-                agregarMensajeSistema(
-                    '⚠️ Respondo con conocimiento general porque no hay contexto cargado. ' +
-                    'Usa "Resumir" para activarlo.'
-                );
-            }
             agregarMensajeAsistente(data.answer, 'DeepSeek v3');
             chatHistory.push({ pregunta: mensaje, respuesta: data.answer });
             await guardarEnHistorial(mensaje, data.answer);
@@ -712,7 +704,7 @@ async function procesarDocumentos(fuentes) {
         const doc = parser.parseFromString(html, 'text/html');
         const sessionInput = doc.getElementById('session-id');
         if (sessionInput && sessionInput.value) {
-            sessionId = sessionInput.value;
+            sessionId = String(sessionInput.value);
             console.log('💾 Session ID obtenido:', sessionId);
         }
     } catch (error) {
@@ -802,9 +794,7 @@ function parsearFlashcards(texto) {
     for (let linea of lineas) {
         linea = linea.trim();
         if (linea.startsWith('TARJETA') || linea.match(/^\d+\./)) {
-            if (currentCard && currentCard.pregunta && currentCard.respuesta) {
-                cards.push(currentCard);
-            }
+            if (currentCard && currentCard.pregunta && currentCard.respuesta) cards.push(currentCard);
             currentCard = { pregunta: '', respuesta: '' };
         } else if (linea.startsWith('Pregunta:')) {
             if (currentCard) currentCard.pregunta = linea.replace('Pregunta:', '').trim();
@@ -812,9 +802,7 @@ function parsearFlashcards(texto) {
             if (currentCard) currentCard.respuesta = linea.replace('Respuesta:', '').trim();
         }
     }
-    if (currentCard && currentCard.pregunta && currentCard.respuesta) {
-        cards.push(currentCard);
-    }
+    if (currentCard && currentCard.pregunta && currentCard.respuesta) cards.push(currentCard);
     return cards;
 }
 
@@ -871,29 +859,13 @@ function renderCurrentCard() {
     document.getElementById('next-btn').disabled = currentCardIndex === currentFlashcards.length - 1;
 }
 
-function flipCard() {
-    document.getElementById('current-flashcard').classList.toggle('flipped');
-}
-
-function nextCard() {
-    if (currentCardIndex < currentFlashcards.length - 1) {
-        currentCardIndex++;
-        renderCurrentCard();
-    }
-}
-
-function previousCard() {
-    if (currentCardIndex > 0) {
-        currentCardIndex--;
-        renderCurrentCard();
-    }
-}
+function flipCard() { document.getElementById('current-flashcard').classList.toggle('flipped'); }
+function nextCard() { if (currentCardIndex < currentFlashcards.length - 1) { currentCardIndex++; renderCurrentCard(); } }
+function previousCard() { if (currentCardIndex > 0) { currentCardIndex--; renderCurrentCard(); } }
 
 function exportarFlashcards() {
     let ankiText = '';
-    for (const card of currentFlashcards) {
-        ankiText += `${card.pregunta}\t${card.respuesta}\n`;
-    }
+    for (const card of currentFlashcards) ankiText += `${card.pregunta}\t${card.respuesta}\n`;
     const blob = new Blob([ankiText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -901,7 +873,7 @@ function exportarFlashcards() {
     a.download = 'flashcards_anki.txt';
     a.click();
     URL.revokeObjectURL(url);
-    agregarMensajeSistema('📥 Flashcards exportadas. Importa el archivo en Anki con formato: Texto separado por tabuladores');
+    agregarMensajeSistema('📥 Flashcards exportadas. Importa en Anki con formato: Texto separado por tabuladores');
 }
 
 // ========================================
@@ -909,21 +881,14 @@ function exportarFlashcards() {
 // ========================================
 
 function añadirOutput(tipo, nombre, contenido) {
-    toolOutputs.push({
-        id: Date.now().toString(),
-        tipo, nombre, contenido,
-        timestamp: new Date()
-    });
+    toolOutputs.push({ id: Date.now().toString(), tipo, nombre, contenido, timestamp: new Date() });
     renderOutputs();
 }
 
 function renderOutputs() {
     const outputSection = document.getElementById('tool-outputs');
     const outputList = document.getElementById('output-list');
-    if (toolOutputs.length === 0) {
-        outputSection.style.display = 'none';
-        return;
-    }
+    if (toolOutputs.length === 0) { outputSection.style.display = 'none'; return; }
     outputSection.style.display = 'block';
     const iconos = { 'resumir': '📝', 'flashcards': '🎴', 'analizar': '📊' };
     outputList.innerHTML = toolOutputs.slice(-5).reverse().map(output => `
@@ -938,11 +903,8 @@ function renderOutputs() {
 function verOutput(outputId) {
     const output = toolOutputs.find(o => o.id === outputId);
     if (!output) return;
-    if (output.tipo === 'flashcards') {
-        mostrarFlashcardsVisuales(output.contenido);
-    } else {
-        agregarMensajeAsistente(output.contenido, 'NXUS o.0.1');
-    }
+    if (output.tipo === 'flashcards') mostrarFlashcardsVisuales(output.contenido);
+    else agregarMensajeAsistente(output.contenido, 'NXUS o.0.1');
 }
 
 function formatTiempo(timestamp) {
@@ -1001,7 +963,7 @@ function agregarMensajeSistema(texto) {
     const messages = document.getElementById('chat-messages');
     const div = document.createElement('div');
     div.className = 'chat-message system';
-    div.innerHTML = `<div class="message-bubble" style="background: rgba(255,255,255,0.05); font-size: 13px; color: var(--muted);">${escapeHtml(texto)}</div>`;
+    div.innerHTML = `<div class="message-bubble" style="background:rgba(255,255,255,0.05);font-size:13px;color:var(--muted)">${escapeHtml(texto)}</div>`;
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
 }
@@ -1065,7 +1027,7 @@ if (chatInput) {
 
 const sessionInput = document.getElementById('session-id');
 if (sessionInput && sessionInput.value) {
-    sessionId = sessionInput.value;
+    sessionId = String(sessionInput.value);
 }
 
 console.log('🎨 NUX IA v2.0 Glassmorphism cargado ✅');
@@ -1081,33 +1043,26 @@ if (isMobile) {
     let touchEndY = 0;
     const capsule = document.getElementById('capsule-sources');
     if (capsule) {
-        capsule.addEventListener('touchstart', (e) => {
-            touchStartY = e.touches[0].clientY;
-        }, { passive: true });
+        capsule.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; }, { passive: true });
         capsule.addEventListener('touchend', (e) => {
             touchEndY = e.changedTouches[0].clientY;
-            handleSwipe();
-        }, { passive: true });
-        function handleSwipe() {
             const swipeDistance = touchStartY - touchEndY;
             const isExpanded = capsule.classList.contains('expanded');
             if (swipeDistance > 50 && !isExpanded) toggleCapsule('sources');
             else if (swipeDistance < -50 && isExpanded) toggleCapsule('sources');
-        }
+        }, { passive: true });
     }
     document.addEventListener('touchstart', (e) => {
         const capsuleSources = document.getElementById('capsule-sources');
-        if (capsuleSources && capsuleSources.classList.contains('expanded')) {
-            if (!capsuleSources.contains(e.target)) toggleCapsule('sources');
+        if (capsuleSources?.classList.contains('expanded') && !capsuleSources.contains(e.target)) {
+            toggleCapsule('sources');
         }
     });
 }
 
 function scrollToBottom() {
     const messages = document.getElementById('chat-messages');
-    if (messages && isMobile) {
-        messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' });
-    }
+    if (messages && isMobile) messages.scrollTo({ top: messages.scrollHeight, behavior: 'smooth' });
 }
 
 const originalAgregarMensaje = agregarMensajeUsuario;
@@ -1117,31 +1072,23 @@ agregarMensajeUsuario = function(texto) {
 };
 
 if (isMobile) {
-    const chatInput = document.getElementById('chat-input');
-    if (chatInput) {
-        chatInput.addEventListener('focus', () => {
-            setTimeout(() => {
-                chatInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }, 300);
+    const chatInputMobile = document.getElementById('chat-input');
+    if (chatInputMobile) {
+        chatInputMobile.addEventListener('focus', () => {
+            setTimeout(() => chatInputMobile.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 300);
         });
-        chatInput.addEventListener('focus', () => {
+        chatInputMobile.addEventListener('focus', () => {
             const capsuleSources = document.getElementById('capsule-sources');
-            if (capsuleSources && capsuleSources.classList.contains('expanded')) {
-                toggleCapsule('sources');
-            }
+            if (capsuleSources?.classList.contains('expanded')) toggleCapsule('sources');
         });
     }
     let resizeTimeout;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-            if (typeof lucide !== 'undefined') lucide.createIcons();
-        }, 250);
+        resizeTimeout = setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 250);
     });
     document.body.addEventListener('touchmove', (e) => {
-        if (e.target.closest('.chat-messages') ||
-            e.target.closest('.sources-content') ||
-            e.target.closest('.tools-content')) return;
+        if (e.target.closest('.chat-messages') || e.target.closest('.sources-content') || e.target.closest('.tools-content')) return;
         e.preventDefault();
     }, { passive: false });
 }
@@ -1153,18 +1100,10 @@ function updateMobileBottomNav() {
     const collapsed = capsule.querySelector('.capsule-collapsed');
     if (!collapsed) return;
     collapsed.innerHTML = `
-        <div class="capsule-icon" onclick="toggleCapsule('sources')" title="Fuentes">
-            <i data-lucide="folder-open"></i>
-        </div>
-        <div class="capsule-icon" onclick="ejecutarHerramienta('resumir')" title="Resumir">
-            <i data-lucide="file-text"></i>
-        </div>
-        <div class="capsule-icon" onclick="ejecutarHerramienta('flashcards')" title="Flashcards">
-            <i data-lucide="layers"></i>
-        </div>
-        <div class="capsule-icon" onclick="ejecutarHerramienta('analizar')" title="Analizar">
-            <i data-lucide="bar-chart-3"></i>
-        </div>
+        <div class="capsule-icon" onclick="toggleCapsule('sources')" title="Fuentes"><i data-lucide="folder-open"></i></div>
+        <div class="capsule-icon" onclick="ejecutarHerramienta('resumir')" title="Resumir"><i data-lucide="file-text"></i></div>
+        <div class="capsule-icon" onclick="ejecutarHerramienta('flashcards')" title="Flashcards"><i data-lucide="layers"></i></div>
+        <div class="capsule-icon" onclick="ejecutarHerramienta('analizar')" title="Analizar"><i data-lucide="bar-chart-3"></i></div>
     `;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -1197,10 +1136,7 @@ function loadPomodoroStats() {
 }
 
 function savePomodoroStats() {
-    localStorage.setItem('pomodoro_stats', JSON.stringify({
-        sessions: pomodoroSessions,
-        lastSession: new Date().toISOString()
-    }));
+    localStorage.setItem('pomodoro_stats', JSON.stringify({ sessions: pomodoroSessions, lastSession: new Date().toISOString() }));
 }
 
 function togglePomodoro() {
@@ -1217,17 +1153,10 @@ function createPomodoroWidget() {
     widget.className = 'pomodoro-widget';
     widget.innerHTML = `
         <div class="pomodoro-header">
-            <div class="pomodoro-title">
-                <i data-lucide="clock" style="width:16px;height:16px;"></i>
-                <span>Pomodoro Timer</span>
-            </div>
+            <div class="pomodoro-title"><i data-lucide="clock" style="width:16px;height:16px;"></i><span>Pomodoro Timer</span></div>
             <div class="pomodoro-actions">
-                <button onclick="minimizePomodoro()" class="pomodoro-btn-icon" title="Minimizar">
-                    <i data-lucide="minus" style="width:14px;height:14px;"></i>
-                </button>
-                <button onclick="closePomodoro()" class="pomodoro-btn-icon" title="Cerrar">
-                    <i data-lucide="x" style="width:14px;height:14px;"></i>
-                </button>
+                <button onclick="minimizePomodoro()" class="pomodoro-btn-icon"><i data-lucide="minus" style="width:14px;height:14px;"></i></button>
+                <button onclick="closePomodoro()" class="pomodoro-btn-icon"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
             </div>
         </div>
         <div class="pomodoro-body">
@@ -1240,24 +1169,12 @@ function createPomodoroWidget() {
                 <div class="pomodoro-time" id="pomodoro-time">25:00</div>
             </div>
             <div class="pomodoro-controls">
-                <button onclick="startPomodoro()" class="pomodoro-btn primary" id="start-btn">
-                    <i data-lucide="play" style="width:16px;height:16px;"></i>
-                    Iniciar
-                </button>
-                <button onclick="pausePomodoro()" class="pomodoro-btn" id="pause-btn" style="display:none;">
-                    <i data-lucide="pause" style="width:16px;height:16px;"></i>
-                    Pausar
-                </button>
-                <button onclick="resetPomodoro()" class="pomodoro-btn">
-                    <i data-lucide="rotate-ccw" style="width:16px;height:16px;"></i>
-                    Reset
-                </button>
+                <button onclick="startPomodoro()" class="pomodoro-btn primary" id="start-btn"><i data-lucide="play" style="width:16px;height:16px;"></i> Iniciar</button>
+                <button onclick="pausePomodoro()" class="pomodoro-btn" id="pause-btn" style="display:none;"><i data-lucide="pause" style="width:16px;height:16px;"></i> Pausar</button>
+                <button onclick="resetPomodoro()" class="pomodoro-btn"><i data-lucide="rotate-ccw" style="width:16px;height:16px;"></i> Reset</button>
             </div>
             <div class="pomodoro-stats">
-                <div class="stat-item">
-                    <i data-lucide="check-circle" style="width:14px;height:14px;"></i>
-                    <span id="sessions-count">0</span> sesiones hoy
-                </div>
+                <div class="stat-item"><i data-lucide="check-circle" style="width:14px;height:14px;"></i><span id="sessions-count">0</span> sesiones hoy</div>
             </div>
         </div>
     `;
@@ -1271,11 +1188,7 @@ function startPomodoro() {
     isPomodoroRunning = true;
     document.getElementById('start-btn').style.display = 'none';
     document.getElementById('pause-btn').style.display = 'flex';
-    pomodoroInterval = setInterval(() => {
-        pomodoroSeconds--;
-        updatePomodoroDisplay();
-        if (pomodoroSeconds <= 0) finishPomodoro();
-    }, 1000);
+    pomodoroInterval = setInterval(() => { pomodoroSeconds--; updatePomodoroDisplay(); if (pomodoroSeconds <= 0) finishPomodoro(); }, 1000);
 }
 
 function pausePomodoro() {
@@ -1314,12 +1227,9 @@ function finishPomodoro() {
 function updatePomodoroDisplay() {
     const minutes = Math.floor(pomodoroSeconds / 60);
     const seconds = pomodoroSeconds % 60;
-    document.getElementById('pomodoro-time').textContent =
-        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    document.getElementById('pomodoro-time').textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     const totalSeconds = pomodoroMode === 'work' ? 25 * 60 : 5 * 60;
-    const progress = ((totalSeconds - pomodoroSeconds) / totalSeconds) * 100;
-    const circumference = 2 * Math.PI * 45;
-    const offset = circumference - (progress / 100) * circumference;
+    const offset = (2 * Math.PI * 45) * (1 - (totalSeconds - pomodoroSeconds) / totalSeconds);
     document.getElementById('pomodoro-progress').style.strokeDashoffset = offset;
 }
 
@@ -1329,47 +1239,33 @@ function updatePomodoroStats() {
 }
 
 function playPomodoroSound() {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    oscillator.frequency.value = 800;
-    oscillator.type = 'sine';
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.5);
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 800;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
 }
 
 function showPomodoroNotification(title, message) {
     const notification = document.createElement('div');
     notification.className = 'pomodoro-notification';
-    notification.innerHTML = `
-        <div class="notification-content">
-            <h4>${title}</h4>
-            <p>${message}</p>
-        </div>
-    `;
+    notification.innerHTML = `<div class="notification-content"><h4>${title}</h4><p>${message}</p></div>`;
     document.body.appendChild(notification);
     setTimeout(() => notification.classList.add('show'), 100);
-    setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    setTimeout(() => { notification.classList.remove('show'); setTimeout(() => notification.remove(), 300); }, 3000);
     if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, { body: message, icon: '/static/icon.png' });
+        new Notification(title, { body: message });
     }
 }
 
-function minimizePomodoro() {
-    document.getElementById('pomodoro-widget').classList.add('minimized');
-}
-
-function closePomodoro() {
-    pausePomodoro();
-    document.getElementById('pomodoro-widget').remove();
-}
+function minimizePomodoro() { document.getElementById('pomodoro-widget').classList.add('minimized'); }
+function closePomodoro() { pausePomodoro(); document.getElementById('pomodoro-widget').remove(); }
 
 loadPomodoroStats();
 console.log('⏱️ Pomodoro Timer loaded');
@@ -1389,29 +1285,16 @@ function mostrarMapaMental(mermaidCode) {
         <div class="mindmap-header">
             <h3>🗺️ Mapa Mental Generado</h3>
             <div class="mindmap-controls">
-                <button class="btn-mindmap" onclick="zoomInMindmap()">
-                    <i data-lucide="zoom-in" style="width:16px;height:16px;"></i> Zoom +
-                </button>
-                <button class="btn-mindmap" onclick="zoomOutMindmap()">
-                    <i data-lucide="zoom-out" style="width:16px;height:16px;"></i> Zoom -
-                </button>
-                <button class="btn-mindmap" onclick="resetZoomMindmap()">
-                    <i data-lucide="maximize" style="width:16px;height:16px;"></i> Reset
-                </button>
-                <button class="btn-mindmap primary" onclick="exportMindmap()">
-                    <i data-lucide="download" style="width:16px;height:16px;"></i> Exportar
-                </button>
+                <button class="btn-mindmap" onclick="zoomInMindmap()"><i data-lucide="zoom-in" style="width:16px;height:16px;"></i> Zoom +</button>
+                <button class="btn-mindmap" onclick="zoomOutMindmap()"><i data-lucide="zoom-out" style="width:16px;height:16px;"></i> Zoom -</button>
+                <button class="btn-mindmap" onclick="resetZoomMindmap()"><i data-lucide="maximize" style="width:16px;height:16px;"></i> Reset</button>
+                <button class="btn-mindmap primary" onclick="exportMindmap()"><i data-lucide="download" style="width:16px;height:16px;"></i> Exportar</button>
             </div>
         </div>
         <div class="mindmap-viewer" id="mindmap-viewer">
-            <div class="mindmap-loading">
-                <div class="spinner"></div>
-                <p>Renderizando mapa mental...</p>
-            </div>
+            <div class="mindmap-loading"><div class="spinner"></div><p>Renderizando mapa mental...</p></div>
         </div>
-        <div class="mindmap-footer">
-            <p>💡 Tip: Usa los controles de zoom para explorar el mapa</p>
-        </div>
+        <div class="mindmap-footer"><p>💡 Tip: Usa los controles de zoom para explorar el mapa</p></div>
     `;
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
@@ -1427,22 +1310,15 @@ async function renderMermaid(code) {
             startOnLoad: false,
             theme: document.body.classList.contains('dark') ? 'dark' : 'default',
             themeVariables: {
-                primaryColor: '#de4cf5',
-                primaryTextColor: '#fff',
-                primaryBorderColor: '#c94dd1',
-                lineColor: '#de4cf5',
-                secondaryColor: '#8b5cf6',
-                tertiaryColor: '#6366f1',
+                primaryColor: '#de4cf5', primaryTextColor: '#fff', primaryBorderColor: '#c94dd1',
+                lineColor: '#de4cf5', secondaryColor: '#8b5cf6', tertiaryColor: '#6366f1',
                 background: document.body.classList.contains('dark') ? '#1a1a2e' : '#ffffff',
                 mainBkg: document.body.classList.contains('dark') ? '#2a2a3e' : '#f8f9fb',
-                nodeBorder: '#de4cf5',
-                fontSize: '14px',
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+                nodeBorder: '#de4cf5', fontSize: '14px'
             },
             mindmap: { padding: 20, useMaxWidth: false }
         });
-        const id = 'mermaid-' + Date.now();
-        const { svg } = await mermaid.render(id, code);
+        const { svg } = await mermaid.render('mermaid-' + Date.now(), code);
         viewer.innerHTML = `<div class="mindmap-svg-container" id="svg-container">${svg}</div>`;
         makeMindmapDraggable();
     } catch (error) {
@@ -1487,22 +1363,17 @@ function makeMindmapDraggable() {
     if (!viewer) return;
     viewer.style.cursor = 'grab';
     viewer.addEventListener('mousedown', (e) => {
-        isDragging = true;
-        viewer.style.cursor = 'grabbing';
-        startX = e.pageX - viewer.offsetLeft;
-        startY = e.pageY - viewer.offsetTop;
-        scrollLeft = viewer.scrollLeft;
-        scrollTop = viewer.scrollTop;
+        isDragging = true; viewer.style.cursor = 'grabbing';
+        startX = e.pageX - viewer.offsetLeft; startY = e.pageY - viewer.offsetTop;
+        scrollLeft = viewer.scrollLeft; scrollTop = viewer.scrollTop;
     });
     viewer.addEventListener('mouseleave', () => { isDragging = false; viewer.style.cursor = 'grab'; });
     viewer.addEventListener('mouseup', () => { isDragging = false; viewer.style.cursor = 'grab'; });
     viewer.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
         e.preventDefault();
-        const x = e.pageX - viewer.offsetLeft;
-        const y = e.pageY - viewer.offsetTop;
-        viewer.scrollLeft = scrollLeft - (x - startX) * 2;
-        viewer.scrollTop = scrollTop - (y - startY) * 2;
+        viewer.scrollLeft = scrollLeft - (e.pageX - viewer.offsetLeft - startX) * 2;
+        viewer.scrollTop = scrollTop - (e.pageY - viewer.offsetTop - startY) * 2;
     });
 }
 
@@ -1514,29 +1385,25 @@ async function exportMindmap() {
         const width = bbox.width + 40;
         const height = bbox.height + 40;
         const canvas = document.createElement('canvas');
-        canvas.width = width * 2;
-        canvas.height = height * 2;
+        canvas.width = width * 2; canvas.height = height * 2;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = document.body.classList.contains('dark') ? '#1a1a2e' : '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        const svgData = new XMLSerializer().serializeToString(svg);
-        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const svgBlob = new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(svgBlob);
         const img = new Image();
         img.onload = function() {
             ctx.drawImage(img, 20, 20, width * 2 - 40, height * 2 - 40);
             canvas.toBlob(function(blob) {
-                const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url;
+                a.href = URL.createObjectURL(blob);
                 a.download = 'mapa-mental-nux-ia.png';
                 a.click();
-                URL.revokeObjectURL(url);
             });
             URL.revokeObjectURL(url);
         };
         img.src = url;
-        agregarMensajeSistema('📥 Mapa mental exportado como imagen PNG');
+        agregarMensajeSistema('📥 Mapa mental exportado como PNG');
     } catch (error) {
         console.error('Error exporting mindmap:', error);
         alert('Error al exportar mapa mental');
@@ -1544,10 +1411,7 @@ async function exportMindmap() {
 }
 
 async function ejecutarHerramientaMindmap() {
-    if (activeSources.length === 0) {
-        agregarMensajeSistema('⚠️ Necesitas añadir documentos primero');
-        return;
-    }
+    if (activeSources.length === 0) { agregarMensajeSistema('⚠️ Necesitas añadir documentos primero'); return; }
     agregarMensajeUsuario('🗺️ Genera un mapa mental del contenido');
     updateProcessingStatus(true);
     mostrarIndicador('Generando mapa mental...');
@@ -1559,33 +1423,18 @@ async function ejecutarHerramientaMindmap() {
             formData.append('archivo', pdfSource.file);
         } else {
             let contenido = '';
-            for (const fuente of fuentesActivas) {
-                if (fuente.content) contenido += fuente.content + '\n\n';
-            }
-            if (!contenido.trim()) {
-                ocultarIndicador();
-                updateProcessingStatus(false);
-                agregarMensajeSistema('⚠️ No hay contenido en las fuentes');
-                return;
-            }
+            for (const fuente of fuentesActivas) { if (fuente.content) contenido += fuente.content + '\n\n'; }
+            if (!contenido.trim()) { ocultarIndicador(); updateProcessingStatus(false); agregarMensajeSistema('⚠️ No hay contenido'); return; }
             formData.append('texto', contenido);
         }
         formData.append('modo', 'general');
         formData.append('task', 'mindmap');
-        const response = await fetch('/resumir', {
-            method: 'POST',
-            headers: { 'Accept': 'application/json' },
-            body: formData
-        });
+        const response = await fetch('/resumir', { method: 'POST', headers: { 'Accept': 'application/json' }, body: formData });
         const data = await response.json();
         ocultarIndicador();
         updateProcessingStatus(false);
-        if (data.mindmap) {
-            mostrarMapaMental(data.mindmap);
-            añadirOutput('mindmap', 'Mapa Mental', data.mindmap);
-        } else if (data.error) {
-            agregarMensajeSistema(`Error: ${data.error}`);
-        }
+        if (data.mindmap) { mostrarMapaMental(data.mindmap); añadirOutput('mindmap', 'Mapa Mental', data.mindmap); }
+        else if (data.error) { agregarMensajeSistema(`Error: ${data.error}`); }
     } catch (error) {
         console.error('Error generando mapa mental:', error);
         ocultarIndicador();
@@ -1605,14 +1454,7 @@ let currentSelection = null;
 
 function loadHighlights() {
     const saved = localStorage.getItem('nux_highlights');
-    if (saved) {
-        try {
-            highlights = JSON.parse(saved);
-            console.log('✅ Highlights cargados:', highlights.length);
-        } catch (e) {
-            highlights = [];
-        }
-    }
+    if (saved) { try { highlights = JSON.parse(saved); } catch (e) { highlights = []; } }
 }
 
 function saveHighlights() {
@@ -1640,21 +1482,11 @@ function showHighlightMenu(x, y) {
     menu.style.top = Math.min(y + 10, window.innerHeight - 100) + 'px';
     menu.innerHTML = `
         <div class="highlight-colors">
-            <button class="highlight-btn yellow" onclick="addHighlight('yellow')" title="Amarillo">
-                <i data-lucide="highlighter" style="width:16px;height:16px;"></i>
-            </button>
-            <button class="highlight-btn green" onclick="addHighlight('green')" title="Verde">
-                <i data-lucide="highlighter" style="width:16px;height:16px;"></i>
-            </button>
-            <button class="highlight-btn blue" onclick="addHighlight('blue')" title="Azul">
-                <i data-lucide="highlighter" style="width:16px;height:16px;"></i>
-            </button>
-            <button class="highlight-btn red" onclick="addHighlight('red')" title="Rojo">
-                <i data-lucide="highlighter" style="width:16px;height:16px;"></i>
-            </button>
-            <button class="highlight-btn note" onclick="addHighlightWithNote()" title="Con nota">
-                <i data-lucide="sticky-note" style="width:16px;height:16px;"></i>
-            </button>
+            <button class="highlight-btn yellow" onclick="addHighlight('yellow')" title="Amarillo"><i data-lucide="highlighter" style="width:16px;height:16px;"></i></button>
+            <button class="highlight-btn green" onclick="addHighlight('green')" title="Verde"><i data-lucide="highlighter" style="width:16px;height:16px;"></i></button>
+            <button class="highlight-btn blue" onclick="addHighlight('blue')" title="Azul"><i data-lucide="highlighter" style="width:16px;height:16px;"></i></button>
+            <button class="highlight-btn red" onclick="addHighlight('red')" title="Rojo"><i data-lucide="highlighter" style="width:16px;height:16px;"></i></button>
+            <button class="highlight-btn note" onclick="addHighlightWithNote()" title="Con nota"><i data-lucide="sticky-note" style="width:16px;height:16px;"></i></button>
         </div>
     `;
     document.body.appendChild(menu);
@@ -1668,13 +1500,7 @@ function hideHighlightMenu() {
 
 function addHighlight(color) {
     if (!currentSelection) return;
-    highlights.push({
-        id: Date.now(),
-        text: currentSelection.text,
-        color,
-        note: '',
-        timestamp: new Date().toISOString()
-    });
+    highlights.push({ id: Date.now(), text: currentSelection.text, color, note: '', timestamp: new Date().toISOString() });
     saveHighlights();
     hideHighlightMenu();
     window.getSelection().removeAllRanges();
@@ -1686,13 +1512,7 @@ function addHighlightWithNote() {
     if (!currentSelection) return;
     hideHighlightMenu();
     const note = prompt('Añade una nota (opcional):');
-    highlights.push({
-        id: Date.now(),
-        text: currentSelection.text,
-        color: 'yellow',
-        note: note || '',
-        timestamp: new Date().toISOString()
-    });
+    highlights.push({ id: Date.now(), text: currentSelection.text, color: 'yellow', note: note || '', timestamp: new Date().toISOString() });
     saveHighlights();
     window.getSelection().removeAllRanges();
     showHighlightFeedback('yellow');
@@ -1702,20 +1522,8 @@ function addHighlightWithNote() {
 function showHighlightFeedback(color) {
     const colorNames = { yellow: '🟡 Amarillo', green: '🟢 Verde', blue: '🔵 Azul', red: '🔴 Rojo' };
     const feedback = document.createElement('div');
-    feedback.className = 'highlight-feedback';
-    feedback.style.cssText = `
-        position: fixed; top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        background: var(--panel-bg); backdrop-filter: blur(12px);
-        border: 2px solid var(--primary); border-radius: 12px;
-        padding: 20px 40px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-        z-index: 10001; animation: fadeInOut 1.5s ease;
-        font-weight: 600; display: flex; align-items: center; gap: 12px;
-    `;
-    feedback.innerHTML = `
-        <i data-lucide="check-circle" style="width:24px;height:24px;color:var(--primary);"></i>
-        <span>Highlight guardado: ${colorNames[color]}</span>
-    `;
+    feedback.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--panel-bg);backdrop-filter:blur(12px);border:2px solid var(--primary);border-radius:12px;padding:20px 40px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:10001;animation:fadeInOut 1.5s ease;font-weight:600;display:flex;align-items:center;gap:12px;`;
+    feedback.innerHTML = `<i data-lucide="check-circle" style="width:24px;height:24px;color:var(--primary);"></i><span>Highlight guardado: ${colorNames[color]}</span>`;
     document.body.appendChild(feedback);
     if (typeof lucide !== 'undefined') lucide.createIcons();
     setTimeout(() => feedback.remove(), 1500);
@@ -1733,20 +1541,11 @@ function createHighlightsPanel() {
     panel.className = 'highlights-panel open';
     panel.innerHTML = `
         <div class="highlights-header">
-            <h3>
-                <i data-lucide="bookmark" style="width:18px;height:18px;"></i>
-                Mis Highlights
-            </h3>
+            <h3><i data-lucide="bookmark" style="width:18px;height:18px;"></i> Mis Highlights</h3>
             <div class="highlights-actions">
-                <button onclick="exportHighlights()" class="btn-icon" title="Exportar">
-                    <i data-lucide="download" style="width:16px;height:16px;"></i>
-                </button>
-                <button onclick="clearAllHighlights()" class="btn-icon" title="Borrar todos">
-                    <i data-lucide="trash-2" style="width:16px;height:16px;"></i>
-                </button>
-                <button onclick="toggleHighlightsPanel()" class="btn-icon" title="Cerrar">
-                    <i data-lucide="x" style="width:16px;height:16px;"></i>
-                </button>
+                <button onclick="exportHighlights()" class="btn-icon"><i data-lucide="download" style="width:16px;height:16px;"></i></button>
+                <button onclick="clearAllHighlights()" class="btn-icon"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>
+                <button onclick="toggleHighlightsPanel()" class="btn-icon"><i data-lucide="x" style="width:16px;height:16px;"></i></button>
             </div>
         </div>
         <div class="highlights-list" id="highlights-list"></div>
@@ -1760,33 +1559,21 @@ function updateHighlightsPanel() {
     const list = document.getElementById('highlights-list');
     if (!list) return;
     if (highlights.length === 0) {
-        list.innerHTML = `
-            <div class="empty-highlights">
-                <i data-lucide="highlighter" style="width:48px;height:48px;opacity:0.3;"></i>
-                <p>No tienes highlights</p>
-                <small>Selecciona texto para añadir</small>
-            </div>
-        `;
+        list.innerHTML = `<div class="empty-highlights"><i data-lucide="highlighter" style="width:48px;height:48px;opacity:0.3;"></i><p>No tienes highlights</p><small>Selecciona texto para añadir</small></div>`;
         if (typeof lucide !== 'undefined') lucide.createIcons();
         return;
     }
     const sorted = [...highlights].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     list.innerHTML = sorted.map(h => {
-        const date = new Date(h.timestamp).toLocaleDateString('es-ES', {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
+        const date = new Date(h.timestamp).toLocaleDateString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         return `
             <div class="highlight-item highlight-${h.color}">
                 <div class="highlight-text">${h.text}</div>
                 ${h.note ? `<div class="highlight-note">📝 ${h.note}</div>` : ''}
                 <div class="highlight-meta">
                     ${date}
-                    <button onclick="editHighlightNote(${h.id})" class="btn-edit" title="Editar nota">
-                        <i data-lucide="edit-2" style="width:12px;height:12px;"></i>
-                    </button>
-                    <button onclick="deleteHighlight(${h.id})" class="btn-delete-small" title="Eliminar">
-                        <i data-lucide="trash-2" style="width:12px;height:12px;"></i>
-                    </button>
+                    <button onclick="editHighlightNote(${h.id})" class="btn-edit"><i data-lucide="edit-2" style="width:12px;height:12px;"></i></button>
+                    <button onclick="deleteHighlight(${h.id})" class="btn-delete-small"><i data-lucide="trash-2" style="width:12px;height:12px;"></i></button>
                 </div>
             </div>
         `;
@@ -1795,14 +1582,10 @@ function updateHighlightsPanel() {
 }
 
 function editHighlightNote(id) {
-    const highlight = highlights.find(h => h.id === id);
-    if (!highlight) return;
-    const newNote = prompt('Nota:', highlight.note);
-    if (newNote !== null) {
-        highlight.note = newNote;
-        saveHighlights();
-        updateHighlightsPanel();
-    }
+    const h = highlights.find(h => h.id === id);
+    if (!h) return;
+    const newNote = prompt('Nota:', h.note);
+    if (newNote !== null) { h.note = newNote; saveHighlights(); updateHighlightsPanel(); }
 }
 
 function deleteHighlight(id) {
@@ -1815,12 +1598,11 @@ function deleteHighlight(id) {
 function exportHighlights() {
     if (highlights.length === 0) { alert('No tienes highlights para exportar'); return; }
     let text = '# MIS HIGHLIGHTS - NUX IA\n\n';
-    text += `Exportado: ${new Date().toLocaleString('es-ES')}\n`;
-    text += `Total: ${highlights.length} highlights\n\n---\n\n`;
+    text += `Exportado: ${new Date().toLocaleString('es-ES')}\nTotal: ${highlights.length}\n\n---\n\n`;
     highlights.forEach((h, i) => {
         text += `## ${i + 1}. ${h.text}\n`;
         if (h.note) text += `**Nota:** ${h.note}\n`;
-        text += `*Color: ${h.color}* | *Fecha: ${new Date(h.timestamp).toLocaleString('es-ES')}*\n\n`;
+        text += `*Color: ${h.color}* | *${new Date(h.timestamp).toLocaleString('es-ES')}*\n\n`;
     });
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -1832,7 +1614,7 @@ function exportHighlights() {
 }
 
 function clearAllHighlights() {
-    if (!confirm(`¿Borrar todos los ${highlights.length} highlights? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Borrar todos los ${highlights.length} highlights?`)) return;
     highlights = [];
     saveHighlights();
     updateHighlightsPanel();
@@ -1854,19 +1636,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.addEventListener('scroll', hideHighlightMenu, true);
-document.addEventListener('mousedown', (e) => {
-    if (!e.target.closest('.highlight-menu')) hideHighlightMenu();
-});
+document.addEventListener('mousedown', (e) => { if (!e.target.closest('.highlight-menu')) hideHighlightMenu(); });
 
 const style = document.createElement('style');
 style.textContent = `
 @keyframes fadeInOut {
-    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-    20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-    80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-    100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-}
-`;
+    0% { opacity:0; transform:translate(-50%,-50%) scale(0.8); }
+    20% { opacity:1; transform:translate(-50%,-50%) scale(1); }
+    80% { opacity:1; transform:translate(-50%,-50%) scale(1); }
+    100% { opacity:0; transform:translate(-50%,-50%) scale(0.8); }
+}`;
 document.head.appendChild(style);
 
-console.log('📝 Highlights & Notes system loaded (improved)');
+console.log('📝 Highlights & Notes system loaded');
