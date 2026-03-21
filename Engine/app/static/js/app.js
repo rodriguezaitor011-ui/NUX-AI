@@ -354,19 +354,22 @@ function confirmarRename() {
         content: null
     };
 
-    sources.push(source);
+  sources.push(source);
     activeSources.push(sourceId);
     renderSources();
-    cerrarRenameModal();
 
-    if (pendingFile.name.endsWith('.txt')) {
+    // ← Guardar referencia ANTES de cerrar el modal
+    const fileToProcess = pendingFile;
+    cerrarRenameModal();  // ← ahora pendingFile = null pero fileToProcess sigue vivo
+
+    if (fileToProcess.name.endsWith('.txt')) {
         const reader = new FileReader();
         reader.onload = function(e) {
             source.content = e.target.result;
             autoProcessSource(source);
         };
-        reader.readAsText(pendingFile);
-    } else if (pendingFile.name.endsWith('.pdf')) {
+        reader.readAsText(fileToProcess);
+    } else if (fileToProcess.name.endsWith('.pdf')) {
         autoProcessSource(source);
     }
 }
