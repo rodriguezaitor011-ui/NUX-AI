@@ -12,6 +12,7 @@ import io
 
 from app.config import settings
 from app.services.ai_orchestrator import process_document_pipeline, chat_with_document
+from app.cache import DocumentCache, get_cache, cached_function
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,10 @@ except (ImportError, ModuleNotFoundError) as e:
     OCR_AVAILABLE = False
     logger.warning(f"OCR no disponible: {e}. El endpoint /api/ocr-image estará deshabilitado.")
 
-from app.database import get_user_by_username, get_user_by_email, create_user, save_chat_message
+from app.database import (
+    get_user_by_username, get_user_by_email, create_user, 
+    save_chat_message, update_user_last_login
+)
 from app.auth import (
     verify_password,
     get_password_hash,
@@ -47,8 +51,11 @@ limiter = Limiter(key_func=get_remote_address)
 
 MODOS_VALIDOS = ["general", "estudiar", "corto", "profesional"]
 
-# Cache temporal para estructura de documentos
-document_cache = {}
+# Cache para documentos usando el nuevo sistema de cache
+document_cache = DocumentCache(max_size=100, ttl=3600)  # 100 documentos, 1 hora
+
+# Cache global para otros usos
+global_cache = get_cache()
 
 OCR_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
@@ -58,6 +65,7 @@ OCR_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 # ============================================================
 
 @router.get("/", response_class=HTMLResponse)
+@cached_function(ttl=300, key_prefix="landing_page")  # Cache por 5 minutos
 async def landing_page(request: Request):
     return templates.TemplateResponse("landing.html", {"request": request})
 
@@ -73,26 +81,31 @@ async def app_page(request: Request):
 
 
 @router.get("/privacy", response_class=HTMLResponse)
+@cached_function(ttl=3600, key_prefix="privacy_page")  # Cache por 1 hora
 async def privacy_page(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
 
 
 @router.get("/privacy-policy", response_class=HTMLResponse)
+@cached_function(ttl=3600, key_prefix="privacy_policy_page")
 async def privacy_policy_page(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
 
 
 @router.get("/terms-of-service", response_class=HTMLResponse)
+@cached_function(ttl=3600, key_prefix="terms_of_service")
 async def terms_of_service(request: Request):
     return templates.TemplateResponse("terms-of-service.html", {"request": request})
 
 
 @router.get("/about", response_class=HTMLResponse)
+@cached_function(ttl=3600, key_prefix="about_page")
 async def about(request: Request):
     return templates.TemplateResponse("about.html", {"request": request})
 
 
 @router.get("/contact", response_class=HTMLResponse)
+@cached_function(ttl=3600, key_prefix="contact_page")
 async def contact(request: Request):
     return templates.TemplateResponse("contact.html", {"request": request})
 
@@ -158,9 +171,12 @@ async def ocr_image_endpoint(request: Request, archivo: UploadFile = File(..., a
 
     try:
         contenido = await archivo.read()
-    except Exception as e:
+    except (IOError, OSError, ValueError) as e:
         logger.exception("Error leyendo archivo OCR: %s", e)
         return JSONResponse(status_code=400, content={"error": "Error al leer la imagen"})
+    except Exception as e:
+        logger.exception("Error inesperado leyendo archivo OCR: %s", e)
+        return JSONResponse(status_code=500, content={"error": "Error interno del servidor"})
 
     if len(contenido) > settings.OCR_MAX_IMAGE_SIZE:
         return JSONResponse(
@@ -458,168 +474,21 @@ async def chat_general_stream(request: Request):
                                             delta = chunk_data["choices"][0].get("delta", {})
                                             content = delta.get("content", "")
                                             if content:
-                                                yield f"data: {json.dumps({'content': content})}\n\n"
-                                    except Exception:
-                                        pass
-
+                                                yield f"data: {json.dumps({'choices': [{'delta': {'content': content}}]})}\n\n"
+                                    except json.JSONDecodeError:
+                                        continue
+                                elif line.strip():
+                                    continue
+                
                 except Exception as e:
-                    logger.error(f"Error en streaming DeepSeek: {e}")
+                    logger.error(f"Error en chat-general-stream: {e}")
                     yield f"data: {json.dumps({'error': str(e)})}\n\n"
-
-        return StreamingResponse(
-            generate(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+        
+        return StreamingResponse(generate(), media_type="text/event-stream")
+    
+    except Exception as e:
+        logger.error(f"Error en chat-general-stream endpoint: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error procesando streaming: {str(e)}"}
         )
-
-    except Exception as e:
-        logger.error(f"Error en chat streaming: {e}", exc_info=True)
-        return JSONResponse(status_code=500, content={"error": "Error al procesar la pregunta"})
-
-
-# ============================================================
-# AUTH
-# ============================================================
-
-@router.post("/register")
-async def register(data: RegisterRequest):
-    try:
-        if get_user_by_email(data.email):
-            return JSONResponse(status_code=400, content={"error": "Email ya registrado"})
-
-        if get_user_by_username(data.username):
-            return JSONResponse(status_code=400, content={"error": "Username ya existe"})
-
-        hashed_password = get_password_hash(data.password)
-        new_user = create_user(
-            username=data.username,
-            email=data.email,
-            hashed_password=hashed_password
-        )
-
-        access_token = create_access_token({"user_id": new_user['id'], "email": new_user['email']})
-        refresh_token = create_refresh_token({"user_id": new_user['id'], "email": new_user['email']})
-
-        return JSONResponse(content={
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer",
-            "user": {
-                "id": new_user['id'],
-                "email": new_user['email'],
-                "username": new_user['username']
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"Error en registro: {e}")
-        return JSONResponse(status_code=500, content={"error": "Error al crear usuario"})
-
-
-@router.post("/login")
-async def login(data: LoginRequest):
-    try:
-        user = get_user_by_email(data.email)
-
-        if not user or not verify_password(data.password, user['hashed_password']):
-            return JSONResponse(status_code=401, content={"error": "Email o contraseña incorrectos"})
-
-        access_token = create_access_token({"user_id": user['id'], "email": user['email']})
-        refresh_token = create_refresh_token({"user_id": user['id'], "email": user['email']})
-
-        return JSONResponse(content={
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer",
-            "user": {
-                "id": user['id'],
-                "email": user['email'],
-                "username": user['username']
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"Error en login: {e}")
-        return JSONResponse(status_code=500, content={"error": "Error al iniciar sesión"})
-
-
-@router.post("/token/refresh")
-async def refresh_token_endpoint(request: Request):
-    try:
-        body = await request.json()
-        refresh_token = body.get("refresh_token")
-        if not refresh_token:
-            return JSONResponse(status_code=400, content={"error": "refresh_token es requerido"})
-
-        payload = decode_token(refresh_token)
-        if not payload or payload.get("type") != "refresh":
-            return JSONResponse(status_code=401, content={"error": "Refresh token inválido"})
-
-        jti = payload.get("jti")
-        if not jti or is_refresh_token_revoked(jti):
-            return JSONResponse(status_code=401, content={"error": "Refresh token revocado"})
-
-        access_token = create_access_token({
-            "user_id": payload.get("user_id"),
-            "email": payload.get("email")
-        })
-        return JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
-
-    except Exception as e:
-        logger.exception("Error refresh token: %s", e)
-        return JSONResponse(status_code=500, content={"error": "Error al refrescar token"})
-
-
-@router.post("/logout")
-async def logout(request: Request):
-    try:
-        body = await request.json()
-        refresh_token = body.get("refresh_token")
-        if not refresh_token:
-            return JSONResponse(status_code=400, content={"error": "refresh_token es requerido"})
-
-        payload = decode_token(refresh_token)
-        if not payload or payload.get("type") != "refresh":
-            return JSONResponse(status_code=401, content={"error": "Refresh token inválido"})
-
-        jti = payload.get("jti")
-        if not jti:
-            return JSONResponse(status_code=400, content={"error": "Token inválido"})
-
-        revoke_refresh_token(jti)
-        return JSONResponse(content={"success": True})
-
-    except Exception as e:
-        logger.exception("Error en logout: %s", e)
-        return JSONResponse(status_code=500, content={"error": "Error al hacer logout"})
-
-
-# ============================================================
-# SAVE CHAT
-# ============================================================
-
-@router.post("/save-chat")
-async def save_chat(request: Request):
-    try:
-        data = await request.json()
-        message = data.get("message")
-        response = data.get("response")
-
-        token = get_token_from_request(request)
-        if not token:
-            return JSONResponse(status_code=401, content={"error": "Token no proporcionado"})
-
-        payload = decode_token(token)
-        if not payload:
-            return JSONResponse(status_code=401, content={"error": "Token inválido o expirado"})
-
-        user = get_user_by_email(payload.get("email"))
-        if not user:
-            return JSONResponse(status_code=401, content={"error": "Usuario no encontrado"})
-
-        save_chat_message(username=user['username'], message=message, response=response)
-        return JSONResponse(content={"success": True})
-
-    except Exception as e:
-        logger.error(f"Error guardando chat: {e}")
-        return JSONResponse(status_code=500, content={"error": "Error al guardar"})

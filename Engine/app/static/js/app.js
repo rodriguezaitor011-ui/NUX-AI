@@ -201,11 +201,9 @@ function formatFileSize(bytes) {
 
 // ========================================
 // AUTO-PROCESAR DOCUMENTO AL AÑADIR
-// Como NotebookLM — sin pasos extra
 // ========================================
 
 async function autoProcessSource(source) {
-    // Marcar como procesando
     source.processing = true;
     source.processed = false;
     renderSources();
@@ -253,7 +251,6 @@ async function autoProcessSource(source) {
         updateProcessingStatus(false);
 
         if (data.session_id) {
-            // ← CRÍTICO: guardar como string
             sessionId = String(data.session_id);
             console.log('💾 sessionId guardado:', sessionId);
 
@@ -261,18 +258,14 @@ async function autoProcessSource(source) {
             source.processed = true;
             renderSources();
 
-            // Rehabilitar input
             if (chatInputEl) {
                 chatInputEl.placeholder = 'Pregunta sobre tus documentos...';
                 chatInputEl.disabled = false;
             }
             if (sendBtnEl) sendBtnEl.disabled = false;
 
-            agregarMensajeSistema(
-                `✅ "${source.name}" listo. Ya puedes hacer preguntas sobre él.`
-            );
+            agregarMensajeSistema(`✅ "${source.name}" listo. Ya puedes hacer preguntas.`);
 
-            // Mostrar resumen automáticamente
             if (data.resumen) {
                 agregarMensajeAsistente(data.resumen, 'NXUS o.0.1');
                 añadirOutput('resumir', `Resumen — ${source.name}`, data.resumen);
@@ -292,7 +285,6 @@ async function autoProcessSource(source) {
         ocultarIndicador();
         updateProcessingStatus(false);
 
-        // Rehabilitar input aunque haya error
         if (chatInputEl) {
             chatInputEl.placeholder = 'Pregunta sobre tus documentos...';
             chatInputEl.disabled = false;
@@ -331,37 +323,42 @@ function cerrarRenameModal() {
     pendingFile = null;
 }
 
+// ← FIX CRÍTICO: guardar referencia al archivo ANTES de cerrar el modal
 function confirmarRename() {
     const input = document.getElementById('rename-input');
     const nuevoNombre = input.value.trim();
+
     if (!nuevoNombre) {
         alert('Por favor, ingresa un nombre para el documento');
         return;
     }
     if (!pendingFile) return;
 
+    // ← Guardar referencia ANTES de llamar a cerrarRenameModal()
+    const fileToProcess = pendingFile;
+
     const sourceId = Date.now().toString();
     const source = {
         id: sourceId,
         name: nuevoNombre,
-        originalName: pendingFile.name,
-        type: pendingFile.name.endsWith('.pdf') ? 'pdf' : 'txt',
-        size: formatFileSize(pendingFile.size),
+        originalName: fileToProcess.name,
+        type: fileToProcess.name.endsWith('.pdf') ? 'pdf' : 'txt',
+        size: formatFileSize(fileToProcess.size),
         active: true,
         processed: false,
         processing: false,
-        file: pendingFile,
+        file: fileToProcess,
         content: null
     };
 
-  sources.push(source);
+    sources.push(source);
     activeSources.push(sourceId);
     renderSources();
 
-    // ← Guardar referencia ANTES de cerrar el modal
-    const fileToProcess = pendingFile;
-    cerrarRenameModal();  // ← ahora pendingFile = null pero fileToProcess sigue vivo
+    // Cerrar modal DESPUÉS de guardar la referencia
+    cerrarRenameModal();
 
+    // Usar fileToProcess (no pendingFile que ya es null)
     if (fileToProcess.name.endsWith('.txt')) {
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -557,19 +554,16 @@ function enviarMensaje() {
     const mensaje = input.value.trim();
     if (!mensaje) return;
 
-    // Sin documentos en modo fuentes
     if (chatMode === 'sources' && sources.length === 0) {
         agregarMensajeSistema('⚠️ Añade un documento primero usando el panel izquierdo.');
         return;
     }
 
-    // Documento procesándose
     if (chatMode === 'sources' && sources.some(s => s.processing)) {
         agregarMensajeSistema('⏳ Espera a que termine de analizar el documento...');
         return;
     }
 
-    // Sin sessionId — documento no procesado aún
     if (chatMode === 'sources' && !sessionId) {
         agregarMensajeSistema(
             '⚠️ El documento aún no está listo. ' +
@@ -764,7 +758,7 @@ async function ejecutarHerramienta(herramienta) {
         updateProcessingStatus(false);
         if (data.session_id) {
             sessionId = String(data.session_id);
-            console.log('💾 Session ID actualizado tras herramienta:', sessionId);
+            console.log('💾 Session ID actualizado:', sessionId);
         }
         if (herramienta === 'flashcards' && data.flashcards) {
             mostrarFlashcardsVisuales(data.flashcards);
@@ -876,7 +870,7 @@ function exportarFlashcards() {
     a.download = 'flashcards_anki.txt';
     a.click();
     URL.revokeObjectURL(url);
-    agregarMensajeSistema('📥 Flashcards exportadas. Importa en Anki con formato: Texto separado por tabuladores');
+    agregarMensajeSistema('📥 Flashcards exportadas. Importa en Anki: Texto separado por tabuladores');
 }
 
 // ========================================
@@ -1091,7 +1085,9 @@ if (isMobile) {
         resizeTimeout = setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 250);
     });
     document.body.addEventListener('touchmove', (e) => {
-        if (e.target.closest('.chat-messages') || e.target.closest('.sources-content') || e.target.closest('.tools-content')) return;
+        if (e.target.closest('.chat-messages') ||
+            e.target.closest('.sources-content') ||
+            e.target.closest('.tools-content')) return;
         e.preventDefault();
     }, { passive: false });
 }
@@ -1139,7 +1135,10 @@ function loadPomodoroStats() {
 }
 
 function savePomodoroStats() {
-    localStorage.setItem('pomodoro_stats', JSON.stringify({ sessions: pomodoroSessions, lastSession: new Date().toISOString() }));
+    localStorage.setItem('pomodoro_stats', JSON.stringify({
+        sessions: pomodoroSessions,
+        lastSession: new Date().toISOString()
+    }));
 }
 
 function togglePomodoro() {
@@ -1156,10 +1155,17 @@ function createPomodoroWidget() {
     widget.className = 'pomodoro-widget';
     widget.innerHTML = `
         <div class="pomodoro-header">
-            <div class="pomodoro-title"><i data-lucide="clock" style="width:16px;height:16px;"></i><span>Pomodoro Timer</span></div>
+            <div class="pomodoro-title">
+                <i data-lucide="clock" style="width:16px;height:16px;"></i>
+                <span>Pomodoro Timer</span>
+            </div>
             <div class="pomodoro-actions">
-                <button onclick="minimizePomodoro()" class="pomodoro-btn-icon"><i data-lucide="minus" style="width:14px;height:14px;"></i></button>
-                <button onclick="closePomodoro()" class="pomodoro-btn-icon"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+                <button onclick="minimizePomodoro()" class="pomodoro-btn-icon">
+                    <i data-lucide="minus" style="width:14px;height:14px;"></i>
+                </button>
+                <button onclick="closePomodoro()" class="pomodoro-btn-icon">
+                    <i data-lucide="x" style="width:14px;height:14px;"></i>
+                </button>
             </div>
         </div>
         <div class="pomodoro-body">
@@ -1172,12 +1178,21 @@ function createPomodoroWidget() {
                 <div class="pomodoro-time" id="pomodoro-time">25:00</div>
             </div>
             <div class="pomodoro-controls">
-                <button onclick="startPomodoro()" class="pomodoro-btn primary" id="start-btn"><i data-lucide="play" style="width:16px;height:16px;"></i> Iniciar</button>
-                <button onclick="pausePomodoro()" class="pomodoro-btn" id="pause-btn" style="display:none;"><i data-lucide="pause" style="width:16px;height:16px;"></i> Pausar</button>
-                <button onclick="resetPomodoro()" class="pomodoro-btn"><i data-lucide="rotate-ccw" style="width:16px;height:16px;"></i> Reset</button>
+                <button onclick="startPomodoro()" class="pomodoro-btn primary" id="start-btn">
+                    <i data-lucide="play" style="width:16px;height:16px;"></i> Iniciar
+                </button>
+                <button onclick="pausePomodoro()" class="pomodoro-btn" id="pause-btn" style="display:none;">
+                    <i data-lucide="pause" style="width:16px;height:16px;"></i> Pausar
+                </button>
+                <button onclick="resetPomodoro()" class="pomodoro-btn">
+                    <i data-lucide="rotate-ccw" style="width:16px;height:16px;"></i> Reset
+                </button>
             </div>
             <div class="pomodoro-stats">
-                <div class="stat-item"><i data-lucide="check-circle" style="width:14px;height:14px;"></i><span id="sessions-count">0</span> sesiones hoy</div>
+                <div class="stat-item">
+                    <i data-lucide="check-circle" style="width:14px;height:14px;"></i>
+                    <span id="sessions-count">0</span> sesiones hoy
+                </div>
             </div>
         </div>
     `;
@@ -1191,7 +1206,11 @@ function startPomodoro() {
     isPomodoroRunning = true;
     document.getElementById('start-btn').style.display = 'none';
     document.getElementById('pause-btn').style.display = 'flex';
-    pomodoroInterval = setInterval(() => { pomodoroSeconds--; updatePomodoroDisplay(); if (pomodoroSeconds <= 0) finishPomodoro(); }, 1000);
+    pomodoroInterval = setInterval(() => {
+        pomodoroSeconds--;
+        updatePomodoroDisplay();
+        if (pomodoroSeconds <= 0) finishPomodoro();
+    }, 1000);
 }
 
 function pausePomodoro() {
@@ -1230,9 +1249,11 @@ function finishPomodoro() {
 function updatePomodoroDisplay() {
     const minutes = Math.floor(pomodoroSeconds / 60);
     const seconds = pomodoroSeconds % 60;
-    document.getElementById('pomodoro-time').textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    document.getElementById('pomodoro-time').textContent =
+        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     const totalSeconds = pomodoroMode === 'work' ? 25 * 60 : 5 * 60;
-    const offset = (2 * Math.PI * 45) * (1 - (totalSeconds - pomodoroSeconds) / totalSeconds);
+    const circumference = 2 * Math.PI * 45;
+    const offset = circumference - ((totalSeconds - pomodoroSeconds) / totalSeconds) * circumference;
     document.getElementById('pomodoro-progress').style.strokeDashoffset = offset;
 }
 
@@ -1258,17 +1279,31 @@ function playPomodoroSound() {
 function showPomodoroNotification(title, message) {
     const notification = document.createElement('div');
     notification.className = 'pomodoro-notification';
-    notification.innerHTML = `<div class="notification-content"><h4>${title}</h4><p>${message}</p></div>`;
+    notification.innerHTML = `
+        <div class="notification-content">
+            <h4>${title}</h4>
+            <p>${message}</p>
+        </div>
+    `;
     document.body.appendChild(notification);
     setTimeout(() => notification.classList.add('show'), 100);
-    setTimeout(() => { notification.classList.remove('show'); setTimeout(() => notification.remove(), 300); }, 3000);
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
     if ('Notification' in window && Notification.permission === 'granted') {
         new Notification(title, { body: message });
     }
 }
 
-function minimizePomodoro() { document.getElementById('pomodoro-widget').classList.add('minimized'); }
-function closePomodoro() { pausePomodoro(); document.getElementById('pomodoro-widget').remove(); }
+function minimizePomodoro() {
+    document.getElementById('pomodoro-widget').classList.add('minimized');
+}
+
+function closePomodoro() {
+    pausePomodoro();
+    document.getElementById('pomodoro-widget').remove();
+}
 
 loadPomodoroStats();
 console.log('⏱️ Pomodoro Timer loaded');
@@ -1288,16 +1323,29 @@ function mostrarMapaMental(mermaidCode) {
         <div class="mindmap-header">
             <h3>🗺️ Mapa Mental Generado</h3>
             <div class="mindmap-controls">
-                <button class="btn-mindmap" onclick="zoomInMindmap()"><i data-lucide="zoom-in" style="width:16px;height:16px;"></i> Zoom +</button>
-                <button class="btn-mindmap" onclick="zoomOutMindmap()"><i data-lucide="zoom-out" style="width:16px;height:16px;"></i> Zoom -</button>
-                <button class="btn-mindmap" onclick="resetZoomMindmap()"><i data-lucide="maximize" style="width:16px;height:16px;"></i> Reset</button>
-                <button class="btn-mindmap primary" onclick="exportMindmap()"><i data-lucide="download" style="width:16px;height:16px;"></i> Exportar</button>
+                <button class="btn-mindmap" onclick="zoomInMindmap()">
+                    <i data-lucide="zoom-in" style="width:16px;height:16px;"></i> Zoom +
+                </button>
+                <button class="btn-mindmap" onclick="zoomOutMindmap()">
+                    <i data-lucide="zoom-out" style="width:16px;height:16px;"></i> Zoom -
+                </button>
+                <button class="btn-mindmap" onclick="resetZoomMindmap()">
+                    <i data-lucide="maximize" style="width:16px;height:16px;"></i> Reset
+                </button>
+                <button class="btn-mindmap primary" onclick="exportMindmap()">
+                    <i data-lucide="download" style="width:16px;height:16px;"></i> Exportar
+                </button>
             </div>
         </div>
         <div class="mindmap-viewer" id="mindmap-viewer">
-            <div class="mindmap-loading"><div class="spinner"></div><p>Renderizando mapa mental...</p></div>
+            <div class="mindmap-loading">
+                <div class="spinner"></div>
+                <p>Renderizando mapa mental...</p>
+            </div>
         </div>
-        <div class="mindmap-footer"><p>💡 Tip: Usa los controles de zoom para explorar el mapa</p></div>
+        <div class="mindmap-footer">
+            <p>💡 Tip: Usa los controles de zoom para explorar el mapa</p>
+        </div>
     `;
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
@@ -1313,11 +1361,16 @@ async function renderMermaid(code) {
             startOnLoad: false,
             theme: document.body.classList.contains('dark') ? 'dark' : 'default',
             themeVariables: {
-                primaryColor: '#de4cf5', primaryTextColor: '#fff', primaryBorderColor: '#c94dd1',
-                lineColor: '#de4cf5', secondaryColor: '#8b5cf6', tertiaryColor: '#6366f1',
+                primaryColor: '#de4cf5',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#c94dd1',
+                lineColor: '#de4cf5',
+                secondaryColor: '#8b5cf6',
+                tertiaryColor: '#6366f1',
                 background: document.body.classList.contains('dark') ? '#1a1a2e' : '#ffffff',
                 mainBkg: document.body.classList.contains('dark') ? '#2a2a3e' : '#f8f9fb',
-                nodeBorder: '#de4cf5', fontSize: '14px'
+                nodeBorder: '#de4cf5',
+                fontSize: '14px'
             },
             mindmap: { padding: 20, useMaxWidth: false }
         });
@@ -1366,9 +1419,12 @@ function makeMindmapDraggable() {
     if (!viewer) return;
     viewer.style.cursor = 'grab';
     viewer.addEventListener('mousedown', (e) => {
-        isDragging = true; viewer.style.cursor = 'grabbing';
-        startX = e.pageX - viewer.offsetLeft; startY = e.pageY - viewer.offsetTop;
-        scrollLeft = viewer.scrollLeft; scrollTop = viewer.scrollTop;
+        isDragging = true;
+        viewer.style.cursor = 'grabbing';
+        startX = e.pageX - viewer.offsetLeft;
+        startY = e.pageY - viewer.offsetTop;
+        scrollLeft = viewer.scrollLeft;
+        scrollTop = viewer.scrollTop;
     });
     viewer.addEventListener('mouseleave', () => { isDragging = false; viewer.style.cursor = 'grab'; });
     viewer.addEventListener('mouseup', () => { isDragging = false; viewer.style.cursor = 'grab'; });
@@ -1388,7 +1444,8 @@ async function exportMindmap() {
         const width = bbox.width + 40;
         const height = bbox.height + 40;
         const canvas = document.createElement('canvas');
-        canvas.width = width * 2; canvas.height = height * 2;
+        canvas.width = width * 2;
+        canvas.height = height * 2;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = document.body.classList.contains('dark') ? '#1a1a2e' : '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1414,7 +1471,10 @@ async function exportMindmap() {
 }
 
 async function ejecutarHerramientaMindmap() {
-    if (activeSources.length === 0) { agregarMensajeSistema('⚠️ Necesitas añadir documentos primero'); return; }
+    if (activeSources.length === 0) {
+        agregarMensajeSistema('⚠️ Necesitas añadir documentos primero');
+        return;
+    }
     agregarMensajeUsuario('🗺️ Genera un mapa mental del contenido');
     updateProcessingStatus(true);
     mostrarIndicador('Generando mapa mental...');
@@ -1426,18 +1486,33 @@ async function ejecutarHerramientaMindmap() {
             formData.append('archivo', pdfSource.file);
         } else {
             let contenido = '';
-            for (const fuente of fuentesActivas) { if (fuente.content) contenido += fuente.content + '\n\n'; }
-            if (!contenido.trim()) { ocultarIndicador(); updateProcessingStatus(false); agregarMensajeSistema('⚠️ No hay contenido'); return; }
+            for (const fuente of fuentesActivas) {
+                if (fuente.content) contenido += fuente.content + '\n\n';
+            }
+            if (!contenido.trim()) {
+                ocultarIndicador();
+                updateProcessingStatus(false);
+                agregarMensajeSistema('⚠️ No hay contenido en las fuentes');
+                return;
+            }
             formData.append('texto', contenido);
         }
         formData.append('modo', 'general');
         formData.append('task', 'mindmap');
-        const response = await fetch('/resumir', { method: 'POST', headers: { 'Accept': 'application/json' }, body: formData });
+        const response = await fetch('/resumir', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' },
+            body: formData
+        });
         const data = await response.json();
         ocultarIndicador();
         updateProcessingStatus(false);
-        if (data.mindmap) { mostrarMapaMental(data.mindmap); añadirOutput('mindmap', 'Mapa Mental', data.mindmap); }
-        else if (data.error) { agregarMensajeSistema(`Error: ${data.error}`); }
+        if (data.mindmap) {
+            mostrarMapaMental(data.mindmap);
+            añadirOutput('mindmap', 'Mapa Mental', data.mindmap);
+        } else if (data.error) {
+            agregarMensajeSistema(`Error: ${data.error}`);
+        }
     } catch (error) {
         console.error('Error generando mapa mental:', error);
         ocultarIndicador();
@@ -1457,7 +1532,9 @@ let currentSelection = null;
 
 function loadHighlights() {
     const saved = localStorage.getItem('nux_highlights');
-    if (saved) { try { highlights = JSON.parse(saved); } catch (e) { highlights = []; } }
+    if (saved) {
+        try { highlights = JSON.parse(saved); } catch (e) { highlights = []; }
+    }
 }
 
 function saveHighlights() {
@@ -1485,11 +1562,21 @@ function showHighlightMenu(x, y) {
     menu.style.top = Math.min(y + 10, window.innerHeight - 100) + 'px';
     menu.innerHTML = `
         <div class="highlight-colors">
-            <button class="highlight-btn yellow" onclick="addHighlight('yellow')" title="Amarillo"><i data-lucide="highlighter" style="width:16px;height:16px;"></i></button>
-            <button class="highlight-btn green" onclick="addHighlight('green')" title="Verde"><i data-lucide="highlighter" style="width:16px;height:16px;"></i></button>
-            <button class="highlight-btn blue" onclick="addHighlight('blue')" title="Azul"><i data-lucide="highlighter" style="width:16px;height:16px;"></i></button>
-            <button class="highlight-btn red" onclick="addHighlight('red')" title="Rojo"><i data-lucide="highlighter" style="width:16px;height:16px;"></i></button>
-            <button class="highlight-btn note" onclick="addHighlightWithNote()" title="Con nota"><i data-lucide="sticky-note" style="width:16px;height:16px;"></i></button>
+            <button class="highlight-btn yellow" onclick="addHighlight('yellow')" title="Amarillo">
+                <i data-lucide="highlighter" style="width:16px;height:16px;"></i>
+            </button>
+            <button class="highlight-btn green" onclick="addHighlight('green')" title="Verde">
+                <i data-lucide="highlighter" style="width:16px;height:16px;"></i>
+            </button>
+            <button class="highlight-btn blue" onclick="addHighlight('blue')" title="Azul">
+                <i data-lucide="highlighter" style="width:16px;height:16px;"></i>
+            </button>
+            <button class="highlight-btn red" onclick="addHighlight('red')" title="Rojo">
+                <i data-lucide="highlighter" style="width:16px;height:16px;"></i>
+            </button>
+            <button class="highlight-btn note" onclick="addHighlightWithNote()" title="Con nota">
+                <i data-lucide="sticky-note" style="width:16px;height:16px;"></i>
+            </button>
         </div>
     `;
     document.body.appendChild(menu);
@@ -1503,7 +1590,13 @@ function hideHighlightMenu() {
 
 function addHighlight(color) {
     if (!currentSelection) return;
-    highlights.push({ id: Date.now(), text: currentSelection.text, color, note: '', timestamp: new Date().toISOString() });
+    highlights.push({
+        id: Date.now(),
+        text: currentSelection.text,
+        color,
+        note: '',
+        timestamp: new Date().toISOString()
+    });
     saveHighlights();
     hideHighlightMenu();
     window.getSelection().removeAllRanges();
@@ -1515,7 +1608,13 @@ function addHighlightWithNote() {
     if (!currentSelection) return;
     hideHighlightMenu();
     const note = prompt('Añade una nota (opcional):');
-    highlights.push({ id: Date.now(), text: currentSelection.text, color: 'yellow', note: note || '', timestamp: new Date().toISOString() });
+    highlights.push({
+        id: Date.now(),
+        text: currentSelection.text,
+        color: 'yellow',
+        note: note || '',
+        timestamp: new Date().toISOString()
+    });
     saveHighlights();
     window.getSelection().removeAllRanges();
     showHighlightFeedback('yellow');
@@ -1525,8 +1624,19 @@ function addHighlightWithNote() {
 function showHighlightFeedback(color) {
     const colorNames = { yellow: '🟡 Amarillo', green: '🟢 Verde', blue: '🔵 Azul', red: '🔴 Rojo' };
     const feedback = document.createElement('div');
-    feedback.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--panel-bg);backdrop-filter:blur(12px);border:2px solid var(--primary);border-radius:12px;padding:20px 40px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:10001;animation:fadeInOut 1.5s ease;font-weight:600;display:flex;align-items:center;gap:12px;`;
-    feedback.innerHTML = `<i data-lucide="check-circle" style="width:24px;height:24px;color:var(--primary);"></i><span>Highlight guardado: ${colorNames[color]}</span>`;
+    feedback.style.cssText = `
+        position:fixed;top:50%;left:50%;
+        transform:translate(-50%,-50%);
+        background:var(--panel-bg);backdrop-filter:blur(12px);
+        border:2px solid var(--primary);border-radius:12px;
+        padding:20px 40px;box-shadow:0 8px 24px rgba(0,0,0,0.3);
+        z-index:10001;animation:fadeInOut 1.5s ease;
+        font-weight:600;display:flex;align-items:center;gap:12px;
+    `;
+    feedback.innerHTML = `
+        <i data-lucide="check-circle" style="width:24px;height:24px;color:var(--primary);"></i>
+        <span>Highlight guardado: ${colorNames[color]}</span>
+    `;
     document.body.appendChild(feedback);
     if (typeof lucide !== 'undefined') lucide.createIcons();
     setTimeout(() => feedback.remove(), 1500);
@@ -1544,11 +1654,20 @@ function createHighlightsPanel() {
     panel.className = 'highlights-panel open';
     panel.innerHTML = `
         <div class="highlights-header">
-            <h3><i data-lucide="bookmark" style="width:18px;height:18px;"></i> Mis Highlights</h3>
+            <h3>
+                <i data-lucide="bookmark" style="width:18px;height:18px;"></i>
+                Mis Highlights
+            </h3>
             <div class="highlights-actions">
-                <button onclick="exportHighlights()" class="btn-icon"><i data-lucide="download" style="width:16px;height:16px;"></i></button>
-                <button onclick="clearAllHighlights()" class="btn-icon"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>
-                <button onclick="toggleHighlightsPanel()" class="btn-icon"><i data-lucide="x" style="width:16px;height:16px;"></i></button>
+                <button onclick="exportHighlights()" class="btn-icon" title="Exportar">
+                    <i data-lucide="download" style="width:16px;height:16px;"></i>
+                </button>
+                <button onclick="clearAllHighlights()" class="btn-icon" title="Borrar todos">
+                    <i data-lucide="trash-2" style="width:16px;height:16px;"></i>
+                </button>
+                <button onclick="toggleHighlightsPanel()" class="btn-icon" title="Cerrar">
+                    <i data-lucide="x" style="width:16px;height:16px;"></i>
+                </button>
             </div>
         </div>
         <div class="highlights-list" id="highlights-list"></div>
@@ -1562,21 +1681,33 @@ function updateHighlightsPanel() {
     const list = document.getElementById('highlights-list');
     if (!list) return;
     if (highlights.length === 0) {
-        list.innerHTML = `<div class="empty-highlights"><i data-lucide="highlighter" style="width:48px;height:48px;opacity:0.3;"></i><p>No tienes highlights</p><small>Selecciona texto para añadir</small></div>`;
+        list.innerHTML = `
+            <div class="empty-highlights">
+                <i data-lucide="highlighter" style="width:48px;height:48px;opacity:0.3;"></i>
+                <p>No tienes highlights</p>
+                <small>Selecciona texto para añadir</small>
+            </div>
+        `;
         if (typeof lucide !== 'undefined') lucide.createIcons();
         return;
     }
     const sorted = [...highlights].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     list.innerHTML = sorted.map(h => {
-        const date = new Date(h.timestamp).toLocaleDateString('es-ES', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const date = new Date(h.timestamp).toLocaleDateString('es-ES', {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
         return `
             <div class="highlight-item highlight-${h.color}">
                 <div class="highlight-text">${h.text}</div>
                 ${h.note ? `<div class="highlight-note">📝 ${h.note}</div>` : ''}
                 <div class="highlight-meta">
                     ${date}
-                    <button onclick="editHighlightNote(${h.id})" class="btn-edit"><i data-lucide="edit-2" style="width:12px;height:12px;"></i></button>
-                    <button onclick="deleteHighlight(${h.id})" class="btn-delete-small"><i data-lucide="trash-2" style="width:12px;height:12px;"></i></button>
+                    <button onclick="editHighlightNote(${h.id})" class="btn-edit" title="Editar nota">
+                        <i data-lucide="edit-2" style="width:12px;height:12px;"></i>
+                    </button>
+                    <button onclick="deleteHighlight(${h.id})" class="btn-delete-small" title="Eliminar">
+                        <i data-lucide="trash-2" style="width:12px;height:12px;"></i>
+                    </button>
                 </div>
             </div>
         `;
@@ -1588,7 +1719,11 @@ function editHighlightNote(id) {
     const h = highlights.find(h => h.id === id);
     if (!h) return;
     const newNote = prompt('Nota:', h.note);
-    if (newNote !== null) { h.note = newNote; saveHighlights(); updateHighlightsPanel(); }
+    if (newNote !== null) {
+        h.note = newNote;
+        saveHighlights();
+        updateHighlightsPanel();
+    }
 }
 
 function deleteHighlight(id) {
@@ -1639,7 +1774,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.addEventListener('scroll', hideHighlightMenu, true);
-document.addEventListener('mousedown', (e) => { if (!e.target.closest('.highlight-menu')) hideHighlightMenu(); });
+document.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.highlight-menu')) hideHighlightMenu();
+});
 
 const style = document.createElement('style');
 style.textContent = `
