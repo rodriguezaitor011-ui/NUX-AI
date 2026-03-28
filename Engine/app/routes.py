@@ -12,7 +12,6 @@ import io
 
 from app.config import settings
 from app.services.ai_orchestrator import process_document_pipeline, chat_with_document
-from app.cache import DocumentCache, get_cache, cached_function
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ except (ImportError, ModuleNotFoundError) as e:
     logger.warning(f"OCR no disponible: {e}. El endpoint /api/ocr-image estará deshabilitado.")
 
 from app.database import (
-    get_user_by_username, get_user_by_email, create_user, 
+    get_user_by_username, get_user_by_email, create_user,
     save_chat_message, update_user_last_login
 )
 from app.auth import (
@@ -51,11 +50,8 @@ limiter = Limiter(key_func=get_remote_address)
 
 MODOS_VALIDOS = ["general", "estudiar", "corto", "profesional"]
 
-# Cache para documentos usando el nuevo sistema de cache
-document_cache = DocumentCache(max_size=100, ttl=3600)  # 100 documentos, 1 hora
-
-# Cache global para otros usos
-global_cache = get_cache()
+# ← Cache simple en memoria — sin dependencias externas
+document_cache = {}
 
 OCR_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
@@ -65,7 +61,6 @@ OCR_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 # ============================================================
 
 @router.get("/", response_class=HTMLResponse)
-@cached_function(ttl=300, key_prefix="landing_page")  # Cache por 5 minutos
 async def landing_page(request: Request):
     return templates.TemplateResponse("landing.html", {"request": request})
 
@@ -81,31 +76,26 @@ async def app_page(request: Request):
 
 
 @router.get("/privacy", response_class=HTMLResponse)
-@cached_function(ttl=3600, key_prefix="privacy_page")  # Cache por 1 hora
 async def privacy_page(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
 
 
 @router.get("/privacy-policy", response_class=HTMLResponse)
-@cached_function(ttl=3600, key_prefix="privacy_policy_page")
 async def privacy_policy_page(request: Request):
     return templates.TemplateResponse("privacy.html", {"request": request})
 
 
 @router.get("/terms-of-service", response_class=HTMLResponse)
-@cached_function(ttl=3600, key_prefix="terms_of_service")
 async def terms_of_service(request: Request):
     return templates.TemplateResponse("terms-of-service.html", {"request": request})
 
 
 @router.get("/about", response_class=HTMLResponse)
-@cached_function(ttl=3600, key_prefix="about_page")
 async def about(request: Request):
     return templates.TemplateResponse("about.html", {"request": request})
 
 
 @router.get("/contact", response_class=HTMLResponse)
-@cached_function(ttl=3600, key_prefix="contact_page")
 async def contact(request: Request):
     return templates.TemplateResponse("contact.html", {"request": request})
 
@@ -153,10 +143,7 @@ class LoginRequest(BaseModel):
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
 async def ocr_image_endpoint(request: Request, archivo: UploadFile = File(..., alias="image")):
     if not OCR_AVAILABLE:
-        return JSONResponse(
-            status_code=503,
-            content={"error": "OCR no disponible."},
-        )
+        return JSONResponse(status_code=503, content={"error": "OCR no disponible."})
     if not archivo.filename:
         return JSONResponse(status_code=400, content={"error": "No se envió ningún archivo"})
 
@@ -185,10 +172,7 @@ async def ocr_image_endpoint(request: Request, archivo: UploadFile = File(..., a
         )
 
     if not settings.OPENAI_API_KEY:
-        return JSONResponse(
-            status_code=503,
-            content={"error": "OCR no disponible. Configura OPENAI_API_KEY."},
-        )
+        return JSONResponse(status_code=503, content={"error": "OCR no disponible. Configura OPENAI_API_KEY."})
 
     try:
         text = await ocr_image_async(contenido, mime_type)
@@ -226,10 +210,7 @@ async def resumir(
 
     try:
         if not texto and not (archivo and archivo.filename):
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Debes proporcionar texto o archivo"}
-            )
+            return JSONResponse(status_code=400, content={"error": "Debes proporcionar texto o archivo"})
 
         if archivo and archivo.filename:
             contenido_bytes = await archivo.read()
@@ -249,24 +230,16 @@ async def resumir(
                     for page in pdf_reader.pages:
                         texto += page.extract_text() + "\n"
                     processing_status.append(f"📄 PDF procesado: {len(pdf_reader.pages)} páginas")
-
                     if not texto.strip():
-                        return JSONResponse(
-                            status_code=400,
-                            content={"error": "No se pudo extraer texto del PDF"}
-                        )
+                        return JSONResponse(status_code=400, content={"error": "No se pudo extraer texto del PDF"})
                 except Exception as e:
                     logger.error(f"Error procesando PDF: {e}")
-                    return JSONResponse(
-                        status_code=500,
-                        content={"error": "Error al procesar el PDF"}
-                    )
+                    return JSONResponse(status_code=500, content={"error": "Error al procesar el PDF"})
 
         if len(texto) > settings.MAX_TEXT_LENGTH:
             texto = texto[:settings.MAX_TEXT_LENGTH]
 
         datos = ResumenRequest(texto=texto, instrucciones=instrucciones, modo=modo, task=task)
-
         logger.info(f"Request desde {request.client.host} [modo: {datos.modo}, task: {datos.task}]")
 
         resultado, estructura, error_msg = await process_document_pipeline(
@@ -288,7 +261,6 @@ async def resumir(
             }
             logger.info(f"💾 Sesión guardada en caché: {session_id}")
 
-        # Respuesta JSON para el frontend
         if request.headers.get("X-Requested-With") == "XMLHttpRequest" or \
            request.headers.get("Accept", "").startswith("application/json"):
             return JSONResponse(content={
@@ -300,7 +272,6 @@ async def resumir(
                 "modelo": "NXUS o.0.1"
             })
 
-        # Respuesta HTML para render directo
         return templates.TemplateResponse("index.html", {
             "request": request,
             "texto": datos.texto,
@@ -330,10 +301,6 @@ async def resumir(
 @router.post("/chat")
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MINUTE}/minute")
 async def chat_endpoint(request: Request):
-    """
-    Leemos el body manualmente para evitar
-    conflicto entre slowapi y Pydantic (causa del 422)
-    """
     try:
         raw = await request.json()
 
@@ -343,10 +310,7 @@ async def chat_endpoint(request: Request):
         history = raw.get("history", [])
 
         if not question:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "La pregunta no puede estar vacía"}
-            )
+            return JSONResponse(status_code=400, content={"error": "La pregunta no puede estar vacía"})
 
         logger.info(
             f"Chat | mode={mode} | session={session_id} | "
@@ -354,7 +318,6 @@ async def chat_endpoint(request: Request):
             f"question={question[:50]}..."
         )
 
-        # Buscar contexto del documento
         doc_context = None
         if session_id:
             if session_id in document_cache:
@@ -362,11 +325,10 @@ async def chat_endpoint(request: Request):
                 logger.info(f"✅ Contexto encontrado para sesión {session_id}")
             else:
                 logger.warning(
-                    f"⚠️ session_id '{session_id}' no encontrado en caché. "
-                    f"Claves disponibles: {list(document_cache.keys())}"
+                    f"⚠️ session_id '{session_id}' no encontrado. "
+                    f"Cache tiene {len(document_cache)} entradas: {list(document_cache.keys())}"
                 )
 
-        # Si modo fuentes y no hay contexto — mensaje claro al usuario
         if mode == "sources" and not doc_context:
             return JSONResponse(content={
                 "answer": (
@@ -393,10 +355,7 @@ async def chat_endpoint(request: Request):
 
     except Exception as e:
         logger.error(f"Error en chat endpoint: {e}", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Error procesando pregunta: {str(e)}"}
-        )
+        return JSONResponse(status_code=500, content={"error": f"Error procesando pregunta: {str(e)}"})
 
 
 # ============================================================
@@ -408,18 +367,11 @@ async def chat_endpoint(request: Request):
 async def chat_general_stream(request: Request):
     try:
         data = await request.json()
-        logger.info(f"📩 Chat-general-stream - Data keys: {list(data.keys())}")
-
         pregunta = data.get("pregunta", "")
         historial = data.get("historial", [])
 
         if not pregunta or not pregunta.strip():
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Pregunta vacía"}
-            )
-
-        logger.info(f"✅ Iniciando streaming desde {request.client.host}")
+            return JSONResponse(status_code=400, content={"error": "Pregunta vacía"})
 
         async def generate():
             from app.services.ai_orchestrator import ModelOrchestrator
@@ -474,21 +426,170 @@ async def chat_general_stream(request: Request):
                                             delta = chunk_data["choices"][0].get("delta", {})
                                             content = delta.get("content", "")
                                             if content:
-                                                yield f"data: {json.dumps({'choices': [{'delta': {'content': content}}]})}\n\n"
+                                                yield f"data: {json.dumps({'content': content})}\n\n"
                                     except json.JSONDecodeError:
                                         continue
-                                elif line.strip():
-                                    continue
-                
+
                 except Exception as e:
-                    logger.error(f"Error en chat-general-stream: {e}")
+                    logger.error(f"Error en streaming: {e}")
                     yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        
-        return StreamingResponse(generate(), media_type="text/event-stream")
-    
-    except Exception as e:
-        logger.error(f"Error en chat-general-stream endpoint: {e}", exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"error": f"Error procesando streaming: {str(e)}"}
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
         )
+
+    except Exception as e:
+        logger.error(f"Error en chat-general-stream: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# ============================================================
+# AUTH
+# ============================================================
+
+@router.post("/register")
+async def register(data: RegisterRequest):
+    try:
+        if get_user_by_email(data.email):
+            return JSONResponse(status_code=400, content={"error": "Email ya registrado"})
+        if get_user_by_username(data.username):
+            return JSONResponse(status_code=400, content={"error": "Username ya existe"})
+
+        hashed_password = get_password_hash(data.password)
+        new_user = create_user(
+            username=data.username,
+            email=data.email,
+            hashed_password=hashed_password
+        )
+
+        if not new_user:
+            return JSONResponse(status_code=500, content={"error": "Error al crear usuario"})
+
+        access_token = create_access_token({"user_id": new_user['id'], "email": new_user['email']})
+        refresh_token = create_refresh_token({"user_id": new_user['id'], "email": new_user['email']})
+
+        return JSONResponse(content={
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": {
+                "id": new_user['id'],
+                "email": new_user['email'],
+                "username": new_user['username']
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error en registro: {e}")
+        return JSONResponse(status_code=500, content={"error": "Error al crear usuario"})
+
+
+@router.post("/login")
+async def login(data: LoginRequest):
+    try:
+        user = get_user_by_email(data.email)
+        if not user or not verify_password(data.password, user['hashed_password']):
+            return JSONResponse(status_code=401, content={"error": "Email o contraseña incorrectos"})
+
+        # Actualizar último login
+        update_user_last_login(user['id'])
+
+        access_token = create_access_token({"user_id": user['id'], "email": user['email']})
+        refresh_token = create_refresh_token({"user_id": user['id'], "email": user['email']})
+
+        return JSONResponse(content={
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user['id'],
+                "email": user['email'],
+                "username": user['username']
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error en login: {e}")
+        return JSONResponse(status_code=500, content={"error": "Error al iniciar sesión"})
+
+
+@router.post("/token/refresh")
+async def refresh_token_endpoint(request: Request):
+    try:
+        body = await request.json()
+        refresh_token = body.get("refresh_token")
+        if not refresh_token:
+            return JSONResponse(status_code=400, content={"error": "refresh_token es requerido"})
+
+        payload = decode_token(refresh_token)
+        if not payload or payload.get("type") != "refresh":
+            return JSONResponse(status_code=401, content={"error": "Refresh token inválido"})
+
+        jti = payload.get("jti")
+        if not jti or is_refresh_token_revoked(jti):
+            return JSONResponse(status_code=401, content={"error": "Refresh token revocado"})
+
+        access_token = create_access_token({
+            "user_id": payload.get("user_id"),
+            "email": payload.get("email")
+        })
+        return JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
+
+    except Exception as e:
+        logger.exception("Error refresh token: %s", e)
+        return JSONResponse(status_code=500, content={"error": "Error al refrescar token"})
+
+
+@router.post("/logout")
+async def logout(request: Request):
+    try:
+        body = await request.json()
+        refresh_token = body.get("refresh_token")
+        if not refresh_token:
+            return JSONResponse(status_code=400, content={"error": "refresh_token es requerido"})
+
+        payload = decode_token(refresh_token)
+        if not payload or payload.get("type") != "refresh":
+            return JSONResponse(status_code=401, content={"error": "Refresh token inválido"})
+
+        jti = payload.get("jti")
+        if not jti:
+            return JSONResponse(status_code=400, content={"error": "Token inválido"})
+
+        revoke_refresh_token(jti)
+        return JSONResponse(content={"success": True})
+
+    except Exception as e:
+        logger.exception("Error en logout: %s", e)
+        return JSONResponse(status_code=500, content={"error": "Error al hacer logout"})
+
+
+# ============================================================
+# SAVE CHAT
+# ============================================================
+
+@router.post("/save-chat")
+async def save_chat(request: Request):
+    try:
+        data = await request.json()
+        message = data.get("message")
+        response = data.get("response")
+
+        token = get_token_from_request(request)
+        if not token:
+            return JSONResponse(status_code=401, content={"error": "Token no proporcionado"})
+
+        payload = decode_token(token)
+        if not payload:
+            return JSONResponse(status_code=401, content={"error": "Token inválido o expirado"})
+
+        user = get_user_by_email(payload.get("email"))
+        if not user:
+            return JSONResponse(status_code=401, content={"error": "Usuario no encontrado"})
+
+        save_chat_message(username=user['username'], message=message, response=response)
+        return JSONResponse(content={"success": True})
+
+    except Exception as e:
+        logger.error(f"Error guardando chat: {e}")
+        return JSONResponse(status_code=500, content={"error": "Error al guardar"})

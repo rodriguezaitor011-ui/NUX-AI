@@ -1,9 +1,8 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -28,7 +27,7 @@ async def lifespan(app: FastAPI):
     # ── Startup ──────────────────────────────────────────
     logger.info("Iniciando aplicación...")
 
-    # 1. Validar configuración (API keys, SECRET_KEY, etc.)
+    # 1. Validar configuración
     try:
         settings.validate()
         logger.info("✅ Configuración validada correctamente")
@@ -36,15 +35,14 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Error de configuración: {e}")
         raise
 
-    # 2. Inicializar base de datos (crea tablas si no existen)
+    # 2. Inicializar base de datos
     try:
         from app.database import init_db
         init_db()
         logger.info("✅ Base de datos inicializada correctamente")
     except Exception as e:
         logger.error(f"❌ Error inicializando base de datos: {e}")
-        # ⚠️ Sin raise — la app arranca aunque la DB falle
-        # Diagnóstica desde /health en vez de crash total
+        # Sin raise — la app arranca aunque la DB falle
 
     yield
 
@@ -58,7 +56,6 @@ app = FastAPI(
     description="Aplicación para resumir textos usando IA",
     version="2.0.0",
     lifespan=lifespan,
-    # Security headers configurados por defecto
     redoc_url=None if settings.ENVIRONMENT == "production" else "/redoc",
     docs_url=None if settings.ENVIRONMENT == "production" else "/docs",
 )
@@ -66,13 +63,6 @@ app = FastAPI(
 # Rate limiter
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# Security middleware - TrustedHostMiddleware
-if settings.ENVIRONMENT == "production":
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=["*"]  # En producción, configurar dominios específicos
-    )
 
 # Compression middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -85,7 +75,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["Content-Length", "X-Request-ID"],
 )
 
 # Archivos estáticos
@@ -98,49 +87,38 @@ app.include_router(router)
 from app.admin_routes import router as admin_router
 app.include_router(admin_router)
 
-# Rutas de usuario
-from app.user_routes import router as user_router
-app.include_router(user_router)
+# ← user_routes ELIMINADO — causaba el 422 en la landing
 
 
-# Security headers middleware
+# Security headers + request logging
 @app.middleware("http")
-async def add_security_headers(request, call_next):
+async def add_security_headers(request: Request, call_next):
     start_time = time.time()
-    
-    # Generate request ID for tracing
     request_id = request.headers.get("X-Request-ID") or str(int(time.time() * 1000))
-    
+
     response = await call_next(request)
-    
-    # Add security headers
-    security_headers = {
-        "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "DENY",
-        "X-XSS-Protection": "1; mode=block",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-        "X-Request-ID": request_id,
-    }
-    
-    # Add CSP in production
+
+    # Headers de seguridad
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-Request-ID"] = request_id
+
     if settings.ENVIRONMENT == "production":
-        security_headers["Content-Security-Policy"] = (
+        response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+            "https://cdn.jsdelivr.net https://unpkg.com "
+            "https://pagead2.googlesyndication.com "
+            "https://www.googletagmanager.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "img-src 'self' data: https:; "
             "font-src 'self' https://cdn.jsdelivr.net; "
-            "connect-src 'self' https://api.groq.com https://api.deepseek.com https://api.openai.com;"
+            "connect-src 'self' https://api.groq.com "
+            "https://api.deepseek.com https://api.openai.com;"
         )
-    
-    # Add HSTS in production (HTTPS only)
-    if settings.ENVIRONMENT == "production" and request.url.scheme == "https":
-        security_headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    
-    for header, value in security_headers.items():
-        response.headers[header] = value
-    
+
     # Log request
     process_time = time.time() - start_time
     logger.info(
@@ -150,7 +128,7 @@ async def add_security_headers(request, call_next):
         f"IP: {request.client.host if request.client else 'unknown'} "
         f"ID: {request_id}"
     )
-    
+
     return response
 
 
@@ -166,7 +144,7 @@ async def health_check():
             db.query(User).limit(1).all()
         db_status = "connected"
     except Exception as e:
-        db_error = str(e)[:100]  # primeros 100 chars para no exponer info sensible
+        db_error = str(e)[:100]
         logger.error(f"Health check DB error: {e}")
 
     return {
