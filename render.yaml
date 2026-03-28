@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: nux-ai
+    env: python
+    buildCommand: chmod +x render-build.sh && ./render-build.sh
+    startCommand: cd Engine && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    pythonVersion: 3.11.9
+    autoDeploy: true
