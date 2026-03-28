@@ -250,3 +250,43 @@ def save_chat_message(username: str, message: str, response: str, session_id: st
     except Exception as e:
         logger.error(f"Error guardando chat: {e}")
         return None
+    
+# ============================================================
+# FUNCIONES ADICIONALES (Requeridas por routes.py)
+# ============================================================
+
+def update_user_last_login(user_id: int) -> bool:
+    """Actualiza la fecha del último acceso del usuario"""
+    try:
+        with db_session() as db:
+            from sqlalchemy import select
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                user.last_login = datetime.now(timezone.utc)
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"Error actualizando último login para ID {user_id}: {e}")
+        return False
+
+def get_user_by_id(user_id: int) -> Optional[Dict]:
+    """Busca un usuario por su ID primario"""
+    try:
+        with db_session() as db:
+            user = db.query(User).filter(User.id == user_id).first()
+            return user.to_dict() if user else None
+    except Exception as e:
+        logger.error(f"Error buscando usuario por ID {user_id}: {e}")
+        return None
+
+def load_chat_history(limit: int = 1000, offset: int = 0) -> List[Dict]:
+    """Carga el historial global de chats (para admin)"""
+    try:
+        with db_session() as db:
+            history = db.query(ChatHistory).order_by(
+                ChatHistory.timestamp.desc()
+            ).offset(offset).limit(limit).all()
+            return [h.to_dict() for h in history]
+    except Exception as e:
+        logger.error(f"Error cargando historial global: {e}")
+        return []
