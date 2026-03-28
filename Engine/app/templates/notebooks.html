@@ -11,15 +11,10 @@
     <link rel="stylesheet" href="/static/css/glassmorphism.css">
     
     <style>
+        /* Reemplazando variables y fuentes por las del ecosistema NUX AI */
         body {
-            font-family: 'Manrope', sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            margin: 0;
-            overflow-x: hidden;
-            display: flex;
-            flex-direction: column;
+            background: var(--bg);
+            color: var(--text);
         }
 
         /* Nav */
@@ -28,19 +23,20 @@
             justify-content: space-between;
             align-items: center;
             padding: 1.5rem 2rem;
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border-bottom: 1px solid var(--border);
             position: sticky;
             top: 0;
             z-index: 100;
-            background: rgba(18, 18, 18, 0.6);
+            background: rgba(6, 6, 15, 0.65);
         }
 
         .logo {
-            font-size: 1.5rem;
+            font-family: var(--font-display);
+            font-size: 1.25rem;
             font-weight: 800;
-            background: linear-gradient(135deg, #fff, rgba(255,255,255,0.7));
+            background: var(--gradient-text);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -56,106 +52,126 @@
         }
 
         .btn-outline {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            color: var(--text);
             padding: 8px 16px;
-            border-radius: 20px;
+            border-radius: var(--radius-full);
             cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: 500;
+            transition: all 0.3s var(--ease-smooth);
+            font-weight: 600;
+            font-family: var(--font-display);
+            font-size: 0.85rem;
         }
 
         .btn-outline:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
+            background: rgba(129,140,248,0.1);
+            border-color: var(--border-aurora);
+            transform: translateY(-1px);
         }
 
         .btn-primary {
-            background: var(--accent-gradient);
+            background: var(--gradient-aurora);
             border: none;
             color: white;
-            padding: 8px 20px;
-            border-radius: 20px;
+            padding: 10px 24px;
+            border-radius: var(--radius-full);
             cursor: pointer;
-            transition: all 0.3s ease;
-            font-weight: 600;
-            box-shadow: 0 4px 15px rgba(255, 143, 112, 0.3);
+            transition: all 0.3s var(--ease-smooth);
+            font-weight: 700;
+            font-family: var(--font-display);
+            box-shadow: 0 4px 16px rgba(129,140,248,0.3);
+            font-size: 0.9rem;
         }
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255, 143, 112, 0.4);
+            box-shadow: 0 8px 24px rgba(192,132,252,0.4);
         }
 
         /* Container */
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 3rem 2rem;
+            padding: 4rem 2rem;
             flex: 1;
             width: 100%;
             box-sizing: border-box;
+            position: relative;
+            z-index: 1;
         }
 
         .header-section {
-            margin-bottom: 3rem;
-            animation: fadeInDown 0.8s ease;
+            margin-bottom: 3.5rem;
+            animation: fadeInDown 0.8s var(--ease-smooth);
         }
 
         .header-section h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
+            font-family: var(--font-display);
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.03em;
+            background: var(--gradient-text);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .header-section p {
-            color: var(--text-secondary);
-            font-size: 1.1rem;
+            color: var(--muted);
+            font-size: 1.15rem;
+            font-weight: 400;
+            max-width: 600px;
         }
 
         /* Grid */
         .notebook-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 2rem;
-            perspective: 1000px; /* Para el efecto 3D */
+            grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+            gap: 24px;
+            perspective: 1200px; 
         }
 
-        /* Tarjeta de Cuaderno */
+        /* Tarjeta de Cuaderno Apple/VisionOS Style */
         .notebook-card {
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 2rem;
+            background: var(--surface);
+            border: 1px solid var(--border-soft);
+            border-radius: 24px;
+            padding: 24px;
             cursor: pointer;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            transition: transform 0.1s; /* Rápido para el mousemove */
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(32px) saturate(180%);
+            -webkit-backdrop-filter: blur(32px) saturate(180%);
+            transition: transform 0.1s, border-color 0.3s ease;
             transform-style: preserve-3d;
             position: relative;
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            gap: 15px;
-            min-height: 220px;
+            gap: 16px;
+            min-height: 240px;
             text-decoration: none;
             color: inherit;
         }
 
+        /* Aurora Glow Blur Background */
         .notebook-card::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--card-color, var(--accent-gradient));
-            opacity: 0.8;
+            top: -50px;
+            right: -50px;
+            width: 160px;
+            height: 160px;
+            background: var(--card-color, var(--primary));
+            filter: blur(60px);
+            opacity: 0.2;
+            z-index: 0;
+            border-radius: 50%;
+            transition: opacity 0.4s var(--ease-smooth);
         }
 
-        /* Efecto highlight en hover estilo cristal */
+        /* Efecto reflejo cristal interno */
         .notebook-card::after {
             content: '';
             position: absolute;
@@ -163,99 +179,131 @@
             left: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+            background: radial-gradient(circle at center, rgba(255,255,255,0.08) 0%, transparent 60%);
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.4s var(--ease-smooth);
             pointer-events: none;
-            transform: translateZ(20px);
+            transform: translateZ(30px);
+            z-index: 2;
         }
 
-        .notebook-card:hover::after {
-            opacity: 1;
-        }
+        .notebook-card:hover { border-color: rgba(255,255,255,0.25); }
+        .notebook-card:hover::before { opacity: 0.4; }
+        .notebook-card:hover::after { opacity: 1; }
 
         .card-emoji {
-            font-size: 3rem;
-            margin-bottom: 10px;
-            transform: translateZ(30px); /* Sale hacia afuera en hover */
+            font-size: 2.2rem;
+            margin-bottom: 8px;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-soft);
+            border-radius: 18px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            z-index: 1;
+            position: relative;
+            transform: translateZ(40px);
+            transition: transform 0.3s var(--ease-bounce);
         }
 
         .card-title {
+            font-family: var(--font-display);
             font-size: 1.25rem;
-            font-weight: 600;
+            font-weight: 700;
+            letter-spacing: -0.01em;
             margin: 0;
-            transform: translateZ(20px);
+            transform: translateZ(25px);
+            z-index: 1;
+            position: relative;
+            color: var(--text);
+            line-height: 1.3;
         }
 
         .card-meta {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
+            color: var(--muted);
+            font-size: 0.8rem;
             margin-top: auto;
-            transform: translateZ(10px);
+            transform: translateZ(15px);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            z-index: 1;
+            position: relative;
+            font-weight: 500;
         }
 
         /* New Notebook Card */
         .new-notebook {
-            background: rgba(255, 255, 255, 0.03);
-            border: 2px dashed var(--border-color);
+            background: rgba(13,13,30,0.4);
+            border: 2px dashed var(--border-soft);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             text-align: center;
-            color: var(--text-secondary);
-            transition: all 0.3s ease;
+            color: var(--muted);
+            transition: all 0.3s var(--ease-smooth);
+            box-shadow: none;
         }
 
+        .new-notebook::before { display: none; }
+        .new-notebook::after { display: none; }
+
         .new-notebook:hover {
-            border-color: #ff8f70;
-            color: var(--text-primary);
-            background: rgba(255, 143, 112, 0.05);
-            transform: translateY(-5px);
+            border-color: var(--primary);
+            color: var(--text);
+            background: rgba(129,140,248,0.04);
+            transform: translateY(-4px) scale(1.01);
         }
 
         .new-notebook i {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
+            font-size: 28px;
+            margin-bottom: 12px;
             color: inherit;
+            background: rgba(255,255,255,0.05);
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        /* Modal Subida */
+        /* Modal Apple-like Subida */
         .modal-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(5px);
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 1000;
             opacity: 0;
             pointer-events: none;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.4s var(--ease-smooth);
         }
 
         .modal-overlay.active {
             opacity: 1;
-            pointer-events: all;
+            pointer-events: auto;
         }
 
         .modal-content {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 24px;
+            background: rgba(22, 22, 34, 0.85); /* translucent */
+            backdrop-filter: blur(40px) saturate(200%);
+            -webkit-backdrop-filter: blur(40px) saturate(200%);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 32px;
             padding: 2.5rem;
             width: 100%;
-            max-width: 500px;
-            transform: scale(0.95) translateY(20px);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            max-width: 480px;
+            transform: scale(0.92) translateY(30px);
+            transition: all 0.4s var(--ease-smooth);
+            box-shadow: 0 32px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255,255,255,0.05) inset;
             position: relative;
         }
 
@@ -263,42 +311,57 @@
             transform: scale(1) translateY(0);
         }
 
+        .modal-content h2 {
+            font-family: var(--font-display);
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text);
+            margin-top: 0;
+        }
+
         .close-modal {
             position: absolute;
-            top: 20px;
-            right: 20px;
-            background: transparent;
+            top: 24px;
+            right: 24px;
+            background: rgba(255,255,255,0.08);
             border: none;
-            color: var(--text-secondary);
-            font-size: 1.5rem;
+            border-radius: 50%;
+            width: 34px; height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--muted);
+            font-size: 1.4rem;
             cursor: pointer;
-            transition: color 0.3s ease;
+            transition: all 0.2s;
         }
 
         .close-modal:hover {
-            color: white;
+            background: rgba(255,255,255,0.15);
+            color: var(--text);
         }
 
         .upload-area {
-            border: 2px dashed var(--border-color);
-            border-radius: 16px;
-            padding: 3rem 2rem;
+            border: 2px dashed var(--border-soft);
+            border-radius: 20px;
+            padding: 2.5rem 1.5rem;
             text-align: center;
             margin-top: 1.5rem;
             cursor: pointer;
-            transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.3s var(--ease-smooth);
+            background: rgba(0, 0, 0, 0.2);
         }
 
         .upload-area:hover, .upload-area.dragover {
-            border-color: #ff8f70;
-            background: rgba(255, 143, 112, 0.05);
+            border-color: var(--primary);
+            background: rgba(129,140,248,0.08);
         }
 
         .upload-area i {
-            font-size: 3rem;
-            color: var(--text-secondary);
-            margin-bottom: 1rem;
+            font-size: 36px;
+            color: var(--primary);
+            margin-bottom: 12px;
             display: block;
         }
 
@@ -306,21 +369,43 @@
             display: none;
         }
 
+        .text-input-styled {
+            width: 100%; 
+            background: rgba(0,0,0,0.3); 
+            border: 1px solid var(--border-soft); 
+            border-radius: 16px; 
+            padding: 16px; 
+            color: var(--text); 
+            font-family: var(--font-body);
+            font-size: 0.95rem;
+            resize: vertical; 
+            box-sizing: border-box; 
+            margin-top: 8px;
+            transition: border-color 0.2s;
+        }
+        .text-input-styled:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(129,140,248,0.15);
+        }
+
         .loader {
             display: none;
             flex-direction: column;
             align-items: center;
             margin-top: 1.5rem;
+            font-weight: 500;
+            color: var(--muted);
         }
         
         .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(255, 143, 112, 0.3);
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(129,140,248, 0.2);
             border-radius: 50%;
-            border-top-color: #ff8f70;
+            border-top-color: var(--primary);
             animation: spin 1s ease-in-out infinite;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
 
         @keyframes spin {
@@ -331,21 +416,9 @@
             from { opacity: 0; transform: translateY(-20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
-        /* Efecto esqueleto para carga inicial */
-        .skeleton {
-            animation: pulse 1.5s infinite ease-in-out;
-            background: linear-gradient(90deg, var(--glass-border) 25%, rgba(255,255,255,0.1) 50%, var(--glass-border) 75%);
-            background-size: 200% 100%;
-        }
-
-        @keyframes pulse {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
     </style>
 </head>
-<body class="dark-theme"> <!-- Forzamos dark theme por el diseño, o lo leemos -->
+<body>
 
     <nav>
         <div class="logo">
@@ -393,7 +466,7 @@
                 <!-- O entrada de texto -->
                 <div style="margin-top: 20px; text-align: center;">
                     <p style="color: var(--text-secondary); font-size: 0.9rem;">O pega tu texto directamente:</p>
-                    <textarea name="texto" id="textInput" rows="4" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; color: white; resize: vertical; box-sizing: border-box; margin-top: 10px;" placeholder="Pega los apuntes aquí..."></textarea>
+                    <textarea name="texto" id="textInput" rows="4" class="text-input-styled" placeholder="Pega los apuntes aquí..."></textarea>
                 </div>
                 
                 <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
@@ -455,7 +528,22 @@
 
             notebooks.forEach(nb => {
                 const date = new Date(nb.updated_at || nb.created_at).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
-                const cardColor = nb.color || 'var(--accent-gradient)';
+                
+                const colorMap = {
+                    'blue': 'var(--aurora-blue)',
+                    'purple': 'var(--aurora-violet)',
+                    'pink': 'var(--aurora-pink)',
+                    'orange': 'var(--aurora-coral)',
+                    'green': 'var(--success)'
+                };
+                // Fallbacks just in case
+                if(nb.color === 'lightblue') nb.color = 'blue';
+                if(nb.color === 'lightpink' || nb.color === 'peachpuff') nb.color = 'pink';
+                if(nb.color === 'lightgreen') nb.color = 'green';
+                if(nb.color === 'thistle') nb.color = 'purple';
+                if(nb.color === 'moccasin') nb.color = 'orange';
+
+                const cardColor = colorMap[nb.color] || 'var(--aurora-blue)';
                 
                 const card = document.createElement('a');
                 card.href = `/app?notebook_id=${nb.id}`;
@@ -466,7 +554,7 @@
                     <div class="card-title">${nb.title}</div>
                     <div class="card-meta">
                         <span>Editado: ${date}</span>
-                        <button onclick="deleteNotebook(${nb.id}, event)" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 5px;">
+                        <button onclick="deleteNotebook(${nb.id}, event)" style="background: none; border: none; color: inherit; cursor: pointer; padding: 5px; opacity: 0.6; transition: opacity 0.2s;">
                             <i class="ri-delete-bin-line"></i>
                         </button>
                     </div>

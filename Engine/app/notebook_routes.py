@@ -28,9 +28,9 @@ def get_current_user_from_request(request: Request) -> Optional[Dict]:
     return user
 
 async def generate_title_and_emoji(text: str) -> tuple[str, str, str]:
-    """Usa IA para generar título corto, emoji y color."""
+    """Usa IA para generar título corto, emoji y color base."""
     async with ModelOrchestrator() as orchestrator:
-        prompt = "Analiza el siguiente texto y genera un objeto JSON con 3 campos: 'title' (título corto de máximo 4 palabras), 'emoji' (un emoji representativo), y 'color' (un color pastel en inglés como 'lightblue', 'lightgreen', 'peachpuff', 'thistle', 'moccasin'). RESPONDE SOLO CON EL JSON VÁLIDO."
+        prompt = "Analiza el siguiente texto y genera un objeto JSON con 3 campos: 'title' (título corto de máximo 4 palabras), 'emoji' (un emoji representativo), y 'color' (elige SOLO UNA de estas opciones: 'blue', 'purple', 'pink', 'orange', 'green'). RESPONDE SOLO CON EL JSON VÁLIDO."
         messages = [
             {"role": "system", "content": prompt},
             {"role": "user", "content": text[:3000]}
@@ -48,9 +48,12 @@ async def generate_title_and_emoji(text: str) -> tuple[str, str, str]:
                 if response.startswith("json"):
                     response = response[4:]
             data = json.loads(response.strip())
-            return data.get("title", "Nuevo Cuaderno"), data.get("emoji", "📓"), data.get("color", "lightblue")
+            color_result = data.get("color", "blue")
+            if color_result not in ["blue", "purple", "pink", "orange", "green"]:
+                color_result = "blue"
+            return data.get("title", "Nuevo Cuaderno"), data.get("emoji", "📓"), color_result
         except Exception:
-            colors = ["lightblue", "lightgreen", "peachpuff", "thistle", "moccasin", "lightpink"]
+            colors = ["blue", "purple", "pink", "orange", "green"]
             return "Nuevo Cuaderno de Estudio", "📓", random.choice(colors)
 
 @router.get("/notebooks", response_class=HTMLResponse)
