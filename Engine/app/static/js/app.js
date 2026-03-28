@@ -813,10 +813,15 @@ function parsearFlashcards(texto) {
 function mostrarFlashcardsVisuales(flashcardsTexto) {
     currentFlashcards = parsearFlashcards(flashcardsTexto);
     currentCardIndex = 0;
+
     if (currentFlashcards.length === 0) {
         agregarMensajeSistema('No se pudieron generar flashcards');
         return;
     }
+
+    // ← ID único para este set de flashcards
+    const setId = Date.now();
+
     const messages = document.getElementById('chat-messages');
     const div = document.createElement('div');
     div.className = 'flashcards-container';
@@ -828,44 +833,63 @@ function mostrarFlashcardsVisuales(flashcardsTexto) {
             </div>
         </div>
         <div class="flashcard-viewer">
-            <div class="flashcard" id="current-flashcard" onclick="flipCard()">
+            <div class="flashcard" id="flashcard-${setId}" onclick="flipCard('${setId}')">
                 <div class="flashcard-inner">
                     <div class="flashcard-front">
                         <div class="flashcard-label">Pregunta</div>
-                        <div class="flashcard-content" id="card-front"></div>
+                        <div class="flashcard-content" id="card-front-${setId}"></div>
                     </div>
                     <div class="flashcard-back">
                         <div class="flashcard-label">Respuesta</div>
-                        <div class="flashcard-content" id="card-back"></div>
+                        <div class="flashcard-content" id="card-back-${setId}"></div>
                     </div>
                 </div>
             </div>
             <div class="flashcard-navigation">
-                <button class="btn-nav" onclick="previousCard()" id="prev-btn">← Anterior</button>
-                <span class="card-counter" id="card-counter">1 / ${currentFlashcards.length}</span>
-                <button class="btn-nav" onclick="nextCard()" id="next-btn">Siguiente →</button>
+                <button class="btn-nav" onclick="previousCard('${setId}')" id="prev-btn-${setId}">← Anterior</button>
+                <span class="card-counter" id="card-counter-${setId}">1 / ${currentFlashcards.length}</span>
+                <button class="btn-nav" onclick="nextCard('${setId}')" id="next-btn-${setId}">Siguiente →</button>
             </div>
         </div>
     `;
+
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
-    renderCurrentCard();
+    renderCurrentCard(setId);
 }
 
-function renderCurrentCard() {
+function renderCurrentCard(setId) {
     if (currentFlashcards.length === 0) return;
     const card = currentFlashcards[currentCardIndex];
-    document.getElementById('card-front').textContent = card.pregunta;
-    document.getElementById('card-back').textContent = card.respuesta;
-    document.getElementById('card-counter').textContent = `${currentCardIndex + 1} / ${currentFlashcards.length}`;
-    document.getElementById('current-flashcard').classList.remove('flipped');
-    document.getElementById('prev-btn').disabled = currentCardIndex === 0;
-    document.getElementById('next-btn').disabled = currentCardIndex === currentFlashcards.length - 1;
+    
+    document.getElementById(`card-front-${setId}`).textContent = card.pregunta;
+    document.getElementById(`card-back-${setId}`).textContent = card.respuesta;
+    document.getElementById(`card-counter-${setId}`).textContent = 
+        `${currentCardIndex + 1} / ${currentFlashcards.length}`;
+    
+    document.getElementById(`flashcard-${setId}`).classList.remove('flipped');
+    document.getElementById(`prev-btn-${setId}`).disabled = currentCardIndex === 0;
+    document.getElementById(`next-btn-${setId}`).disabled = 
+        currentCardIndex === currentFlashcards.length - 1;
 }
 
-function flipCard() { document.getElementById('current-flashcard').classList.toggle('flipped'); }
-function nextCard() { if (currentCardIndex < currentFlashcards.length - 1) { currentCardIndex++; renderCurrentCard(); } }
-function previousCard() { if (currentCardIndex > 0) { currentCardIndex--; renderCurrentCard(); } }
+function flipCard(setId) {
+    document.getElementById(`flashcard-${setId}`).classList.toggle('flipped');
+}
+
+function nextCard(setId) {
+    if (currentCardIndex < currentFlashcards.length - 1) {
+        currentCardIndex++;
+        renderCurrentCard(setId);
+    }
+}
+
+function previousCard(setId) {
+    if (currentCardIndex > 0) {
+        currentCardIndex--;
+        renderCurrentCard(setId);
+    }
+}
 
 function exportarFlashcards() {
     let ankiText = '';
@@ -956,6 +980,19 @@ function agregarMensajeAsistente(texto, modelo = 'DeepSeek v3') {
     `;
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
+    
+    // ← NUEVO: renderizar matemáticas
+    if (typeof renderMathInElement !== 'undefined') {
+        renderMathInElement(div, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\(', right: '\\)', display: false},
+                {left: '\\[', right: '\\]', display: true}
+            ],
+            throwOnError: false
+        });
+    }
 }
 
 function crearMensajeAsistenteVacio(modelo = 'DeepSeek v3') {
