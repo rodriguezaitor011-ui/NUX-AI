@@ -56,11 +56,7 @@ async def generate_title_and_emoji(text: str) -> tuple[str, str, str]:
 @router.get("/notebooks", response_class=HTMLResponse)
 async def notebooks_page(request: Request):
     """Página principal de Cuadernos"""
-    user = get_current_user_from_request(request)
-    if not user:
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse("notebooks.html", {"request": request, "user": user})
+    return templates.TemplateResponse("notebooks.html", {"request": request})
 
 @router.get("/api/notebooks")
 async def list_notebooks(request: Request):

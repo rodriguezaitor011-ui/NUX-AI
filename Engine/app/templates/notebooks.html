@@ -42,6 +42,7 @@
             font-weight: 800;
             background: linear-gradient(135deg, #fff, rgba(255,255,255,0.7));
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             display: flex;
             align-items: center;
@@ -409,15 +410,15 @@
 
     <script>
         // Check Auth
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem('auth_token');
         if (!token) {
             window.location.href = '/login';
         }
 
         // Recuperar user (opcional si lo guardaste en localstorage, si no lo extraemos del token o api profile)
-        const userStr = localStorage.getItem('user');
-        if (userStr) {
-            document.getElementById('usernameDisplay').innerText = JSON.parse(userStr).username;
+        const username = localStorage.getItem('user_username');
+        if (username) {
+            document.getElementById('usernameDisplay').innerText = username;
         }
 
         // Cargar Notebooks
@@ -614,10 +615,10 @@
         }
 
         function logout() {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
+            if(confirm("¿Seguro que quieres cerrar sesión?")) {
+                localStorage.clear();
+                window.location.href = '/login';
+            }
         }
 
         // Init
