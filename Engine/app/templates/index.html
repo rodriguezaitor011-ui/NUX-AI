@@ -37,6 +37,9 @@ if (!token || !username) {
         <button class="btn-outline" style="margin-left: 15px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 5px 12px; cursor: pointer; display: flex; align-items: center; gap: 5px;" onclick="window.location.href='/notebooks'">
             <i data-lucide="library" style="width: 16px; height: 16px;"></i> Mis Cuadernos
         </button>
+        <div id="active-notebook-title" style="margin-left: 20px; font-weight: 600; font-size: 0.95rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; opacity: 0;">
+            <span id="nb-emoji"></span> <span id="nb-name"></span>
+        </div>
     </div>
     <div class="header-right">
         <div class="user-badge" id="user-badge">Cargando...</div>
@@ -420,6 +423,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                     sources.push(source);
                     activeSources.push("nb-doc");
                     renderSources();
+                }
+
+                // Update UI title if available
+                if (data.notebook) {
+                    const nbTitleEl = document.getElementById('active-notebook-title');
+                    const nbEmojiEl = document.getElementById('nb-emoji');
+                    const nbNameEl = document.getElementById('nb-name');
+                    if (nbTitleEl && nbEmojiEl && nbNameEl) {
+                        nbEmojiEl.textContent = data.notebook.emoji || '📓';
+                        nbNameEl.textContent = data.notebook.title || 'Cuaderno';
+                        nbTitleEl.style.opacity = '1';
+                    }
                 }
 
                 // Remove welcome message

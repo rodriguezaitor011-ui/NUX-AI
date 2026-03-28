@@ -284,6 +284,24 @@ async function autoProcessSource(source) {
                 añadirOutput('resumir', `Resumen — ${source.name}`, data.resumen);
             }
 
+            // Actualización dinámica de título de cuaderno si viene del backend
+            if (data.new_notebook_metadata) {
+                const { title, emoji, color } = data.new_notebook_metadata;
+                const nbTitleEl = document.getElementById('active-notebook-title');
+                const nbEmojiEl = document.getElementById('nb-emoji');
+                const nbNameEl = document.getElementById('nb-name');
+                if (nbTitleEl && nbEmojiEl && nbNameEl) {
+                    nbEmojiEl.textContent = emoji || '📓';
+                    nbNameEl.textContent = title || 'Cuaderno';
+                    nbTitleEl.style.opacity = '1';
+                    
+                    // Efecto visual de actualización
+                    nbTitleEl.style.transition = 'all 0.5s ease';
+                    nbTitleEl.style.transform = 'scale(1.05)';
+                    setTimeout(() => nbTitleEl.style.transform = 'scale(1)', 500);
+                }
+            }
+
         } else if (data.error) {
             throw new Error(data.error);
         } else {

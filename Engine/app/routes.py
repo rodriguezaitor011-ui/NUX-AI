@@ -32,7 +32,7 @@ except (ImportError, ModuleNotFoundError) as e:
 
 from app.database import (
     get_user_by_username, get_user_by_email, create_user,
-    save_chat_message, update_user_last_login
+    save_chat_message, update_user_last_login, db_session, Notebook
 )
 from app.auth import (
     verify_password,
@@ -297,14 +297,40 @@ async def resumir(
             return JSONResponse(status_code=500, content={"error": error_msg})
 
         session_id = None
+        new_metadata = {}
+        
         if estructura:
-            session_id = str(hash(datos.texto[:100]))
+            # Lógica de Naming Dinámico
+            if notebook_id:
+                try:
+                    with db_session() as db:
+                        nb = db.query(Notebook).filter(Notebook.id == notebook_id).first()
+                        if nb and nb.title == "Nuevo Cuaderno":
+                            from app.services.ai_orchestrator import ModelOrchestrator
+                            async with ModelOrchestrator() as orch:
+                                n_title, n_emoji, n_color = await orch.generate_title_and_emoji(texto)
+                                nb.title = n_title
+                                nb.emoji = n_emoji
+                                nb.color = n_color
+                                db.commit()
+                                new_metadata = {
+                                    "title": n_title,
+                                    "emoji": n_emoji,
+                                    "color": n_color
+                                }
+                                logger.info(f"📓 Cuaderno {notebook_id} renombrado dinámicamente a: {n_title}")
+                except Exception as e:
+                    logger.error(f"Error en naming dinámico: {e}")
+
+            import hashlib
+            session_id = hashlib.sha1(texto[:1000].encode('utf-8')).hexdigest()[:12]
+            
             document_cache[session_id] = {
                 "summary": resultado,
                 "structure": estructura,
-                "original_text": datos.texto[:5000]
+                "original_text": texto # Guardamos el texto completo si es admin o hasta el limite si no
             }
-            logger.info(f"💾 Sesión guardada en caché: {session_id}")
+            logger.info(f"💾 Sesión guardada en caché: {session_id} (isAdmin: {is_admin})")
             
             # Si pasaron un notebook_id, actualizamos su estructura y guardamos el resumen como primer mensaje
             if notebook_id:

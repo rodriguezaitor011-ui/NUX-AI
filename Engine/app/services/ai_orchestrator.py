@@ -623,6 +623,36 @@ Empieza con ```mermaid y termina con ```
         
         return mindmap
 
+    async def generate_title_and_emoji(self, text: str) -> tuple[str, str, str]:
+        """Usa IA para generar título corto, emoji y color base."""
+        prompt = "Analiza el siguiente texto y genera un objeto JSON con 3 campos: 'title' (título corto de máximo 4 palabras), 'emoji' (un emoji representativo), y 'color' (elige SOLO UNA de estas opciones: 'blue', 'purple', 'pink', 'orange', 'green'). RESPONDE SOLO CON EL JSON VÁLIDO."
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": text[:3000]}
+        ]
+        response = await self._call_groq(
+            model=self.MODELS["structure_analyst"],
+            messages=messages,
+            max_tokens=200,
+            temperature=0.7
+        )
+        try:
+            # Limpiar posible markdown
+            if response and response.startswith("```"):
+                response = response.split("```")[1]
+                if response.startswith("json"):
+                    response = response[4:]
+            import json
+            data = json.loads(response.strip())
+            color_result = data.get("color", "blue")
+            if color_result not in ["blue", "purple", "pink", "orange", "green"]:
+                color_result = "blue"
+            return data.get("title", "Nuevo Cuaderno"), data.get("emoji", "📓"), color_result
+        except Exception:
+            import random
+            colors = ["blue", "purple", "pink", "orange", "green"]
+            return "Nuevo Cuaderno de Estudio", "📓", random.choice(colors)
+
 
 # Pipeline completo (sin cambios en la interfaz)
 async def process_document_pipeline(

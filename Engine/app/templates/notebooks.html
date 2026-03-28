@@ -438,48 +438,17 @@
 
         <div class="notebook-grid" id="notebooksGrid">
             <!-- Nuevo Cuaderno -->
-            <div class="notebook-card new-notebook" onclick="openNewNotebookModal()" style="transform: none;">
+            <div class="notebook-card new-notebook" onclick="createNewNotebookQuick()" style="transform: none;">
                 <i class="ri-add-line"></i>
                 <h3 class="card-title">Nuevo Cuaderno</h3>
-                <p style="font-size: 0.85rem; margin-top: 5px;">Sube un PDF o texto</p>
+                <p style="font-size: 0.85rem; margin-top: 5px;">Empieza de cero</p>
             </div>
             
             <!-- Aquí se inyectan dinámicamente -->
         </div>
     </div>
 
-    <!-- Modal Nuevo Cuaderno -->
-    <div class="modal-overlay" id="uploadModal">
-        <div class="modal-content">
-            <button class="close-modal" onclick="closeNewNotebookModal()"><i class="ri-close-line"></i></button>
-            <h2>Crear Nuevo Cuaderno</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 20px;">Sube tu documento y NUX IA preparará tu espacio de estudio.</p>
-            
-            <form id="createNotebookForm">
-                <div class="upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
-                    <i class="ri-upload-cloud-2-line"></i>
-                    <h3 style="margin: 0; font-weight: 600;">Haz clic o arrastra un archivo</h3>
-                    <p style="margin: 5px 0 0; color: var(--text-secondary); font-size: 0.9rem;">PDF, TXT soportados</p>
-                    <input type="file" id="fileInput" name="archivo" accept=".pdf,.txt">
-                </div>
-                
-                <!-- O entrada de texto -->
-                <div style="margin-top: 20px; text-align: center;">
-                    <p style="color: var(--text-secondary); font-size: 0.9rem;">O pega tu texto directamente:</p>
-                    <textarea name="texto" id="textInput" rows="4" class="text-input-styled" placeholder="Pega los apuntes aquí..."></textarea>
-                </div>
-                
-                <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
-                    <button type="submit" class="btn-primary" id="submitBtn" style="width: 100%; padding: 12px;">Analizar y Crear</button>
-                </div>
-
-                <div class="loader" id="creationLoader">
-                    <div class="spinner"></div>
-                    <div>Analizando estructura y generando entorno...</div>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- Modal de creación eliminado para flujo directo -->
 
     <script>
         // Check Auth
@@ -519,10 +488,10 @@
             const grid = document.getElementById('notebooksGrid');
             // Mantener el botón de nuevo
             grid.innerHTML = `
-                <div class="notebook-card new-notebook" onclick="openNewNotebookModal()" style="transform: none;">
+                <div class="notebook-card new-notebook" onclick="createNewNotebookQuick()" style="transform: none;">
                     <i class="ri-add-line"></i>
                     <h3 class="card-title">Nuevo Cuaderno</h3>
-                    <p style="font-size: 0.85rem; margin-top: 5px;">Sube un PDF o texto</p>
+                    <p style="font-size: 0.85rem; margin-top: 5px;">Empieza de cero</p>
                 </div>
             `;
 
@@ -583,103 +552,26 @@
             });
         }
 
-        // Modal Logic
-        function openNewNotebookModal() {
-            document.getElementById('uploadModal').classList.add('active');
-        }
-
-        function closeNewNotebookModal() {
-            document.getElementById('uploadModal').classList.remove('active');
-            document.getElementById('createNotebookForm').reset();
-            document.getElementById('submitBtn').style.display = 'block';
-            document.getElementById('creationLoader').style.display = 'none';
-        }
-
-        // Dropzone interactions
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-        });
-
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false)
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false)
-        });
-
-        dropZone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            fileInput.files = files;
-            updateDropzoneText(files[0].name);
-        });
-
-        fileInput.addEventListener('change', (e) => {
-            if(fileInput.files.length > 0) {
-                updateDropzoneText(fileInput.files[0].name);
-            }
-        });
-
-        function updateDropzoneText(filename) {
-            dropZone.innerHTML = `
-                <i class="ri-file-text-line" style="color: #ff8f70;"></i>
-                <h3 style="margin: 0; font-weight: 600;">${filename}</h3>
-                <p style="margin: 5px 0 0; color: var(--text-secondary); font-size: 0.9rem;">Archivo seleccionado listo</p>
-            `;
-        }
-
-        // Form Submit
-        document.getElementById('createNotebookForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const file = fileInput.files[0];
-            const text = document.getElementById('textInput').value.trim();
-            
-            if (!file && !text) {
-                alert('Por favor selecciona un archivo o pega un texto.');
-                return;
-            }
-
-            document.getElementById('submitBtn').style.display = 'none';
-            document.getElementById('creationLoader').style.display = 'flex';
-
-            const formData = new FormData();
-            if (file) formData.append('archivo', file);
-            if (text) formData.append('texto', text);
-
+        // Nueva Lógica de Creación Rápida
+        async function createNewNotebookQuick() {
             try {
                 const response = await fetch('/api/notebooks', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`
-                    },
-                    body: formData
+                    }
                 });
-
                 const data = await response.json();
-                
-                if (response.ok && data.notebook) {
-                    // Redirigir al área de estudio e indicar que procese
+                if (data.notebook) {
                     window.location.href = `/app?notebook_id=${data.notebook.id}`;
                 } else {
-                    alert(data.error || 'Error creando cuaderno');
-                    closeNewNotebookModal();
+                    alert('Error al crear cuaderno');
                 }
             } catch (err) {
                 console.error(err);
                 alert('Error de conexión');
-                closeNewNotebookModal();
             }
-        });
+        }
 
         async function deleteNotebook(id, event) {
             event.preventDefault(); // Evita la navegación al hacer click en el enlace

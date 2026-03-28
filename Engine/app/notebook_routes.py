@@ -27,34 +27,9 @@ def get_current_user_from_request(request: Request) -> Optional[Dict]:
     user = get_user_by_email(payload.get("email"))
     return user
 
-async def generate_title_and_emoji(text: str) -> tuple[str, str, str]:
-    """Usa IA para generar título corto, emoji y color base."""
-    async with ModelOrchestrator() as orchestrator:
-        prompt = "Analiza el siguiente texto y genera un objeto JSON con 3 campos: 'title' (título corto de máximo 4 palabras), 'emoji' (un emoji representativo), y 'color' (elige SOLO UNA de estas opciones: 'blue', 'purple', 'pink', 'orange', 'green'). RESPONDE SOLO CON EL JSON VÁLIDO."
-        messages = [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": text[:3000]}
-        ]
-        response = await orchestrator._call_groq(
-            model=orchestrator.MODELS["structure_analyst"],
-            messages=messages,
-            max_tokens=200,
-            temperature=0.7
-        )
-        try:
-            # Limpiar posible markdown
-            if response.startswith("```"):
-                response = response.split("```")[1]
-                if response.startswith("json"):
-                    response = response[4:]
-            data = json.loads(response.strip())
-            color_result = data.get("color", "blue")
-            if color_result not in ["blue", "purple", "pink", "orange", "green"]:
-                color_result = "blue"
-            return data.get("title", "Nuevo Cuaderno"), data.get("emoji", "📓"), color_result
-        except Exception:
-            colors = ["blue", "purple", "pink", "orange", "green"]
-            return "Nuevo Cuaderno de Estudio", "📓", random.choice(colors)
+async def get_title_generator(text: str):
+    async with ModelOrchestrator() as orch:
+        return await orch.generate_title_and_emoji(text)
 
 @router.get("/notebooks", response_class=HTMLResponse)
 async def notebooks_page(request: Request):
@@ -87,35 +62,38 @@ async def create_notebook(
     if not user:
         return JSONResponse(status_code=401, content={"error": "No autorizado"})
     
+    # Si no hay texto ni archivo, es una creación rápida
     if not texto and not (archivo and archivo.filename):
-        return JSONResponse(status_code=400, content={"error": "Debes proporcionar texto o archivo"})
+        title, emoji, color = "Nuevo Cuaderno", "📓", "blue"
+        content_text = None
+        filename = None
+    else:
+        content_text = texto or ""
+        filename = None
+        
+        if archivo and archivo.filename:
+            filename = archivo.filename
+            contenido_bytes = await archivo.read()
+            if archivo.filename.endswith(".txt"):
+                try:
+                    content_text = contenido_bytes.decode("utf-8")
+                except Exception:
+                    content_text = contenido_bytes.decode("latin-1")
+            elif archivo.filename.endswith(".pdf"):
+                try:
+                    pdf_file = io.BytesIO(contenido_bytes)
+                    pdf_reader = PyPDF2.PdfReader(pdf_file)
+                    content_text = ""
+                    for page in pdf_reader.pages:
+                        content_text += page.extract_text() + "\n"
+                    if not content_text.strip():
+                        return JSONResponse(status_code=400, content={"error": "No se pudo extraer texto del PDF"})
+                except Exception as e:
+                    logger.error(f"Error procesando PDF: {e}")
+                    return JSONResponse(status_code=500, content={"error": "Error al procesar el PDF"})
 
-    content_text = texto or ""
-    filename = None
-    
-    if archivo and archivo.filename:
-        filename = archivo.filename
-        contenido_bytes = await archivo.read()
-        if archivo.filename.endswith(".txt"):
-            try:
-                content_text = contenido_bytes.decode("utf-8")
-            except Exception:
-                content_text = contenido_bytes.decode("latin-1")
-        elif archivo.filename.endswith(".pdf"):
-            try:
-                pdf_file = io.BytesIO(contenido_bytes)
-                pdf_reader = PyPDF2.PdfReader(pdf_file)
-                content_text = ""
-                for page in pdf_reader.pages:
-                    content_text += page.extract_text() + "\n"
-                if not content_text.strip():
-                    return JSONResponse(status_code=400, content={"error": "No se pudo extraer texto del PDF"})
-            except Exception as e:
-                logger.error(f"Error procesando PDF: {e}")
-                return JSONResponse(status_code=500, content={"error": "Error al procesar el PDF"})
-
-    # Generar título con IA
-    title, emoji, color = await generate_title_and_emoji(content_text)
+        # Generar título con IA solo si hay contenido
+        title, emoji, color = await get_title_generator(content_text)
     
     try:
         with db_session() as db:
@@ -130,14 +108,15 @@ async def create_notebook(
             db.refresh(new_notebook)
             nb_id = new_notebook.id
 
-            new_doc = NotebookDocument(
-                notebook_id=nb_id,
-                filename=filename,
-                content=content_text,
-                structure=json.dumps({"info": "Estructura pendiente de análisis general"})
-            )
-            db.add(new_doc)
-            db.flush()
+            if content_text:
+                new_doc = NotebookDocument(
+                    notebook_id=nb_id,
+                    filename=filename,
+                    content=content_text,
+                    structure=json.dumps({"info": "Estructura pendiente de análisis general"})
+                )
+                db.add(new_doc)
+                db.flush()
             
             return JSONResponse(content={"success": True, "notebook": new_notebook.to_dict()})
             
