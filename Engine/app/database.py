@@ -80,10 +80,17 @@ class User(Base):
             "id": self.id,
             "username": self.username,
             "email": self.email,
+            "hashed_password": self.hashed_password,
             "is_admin": self.is_admin,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,
         }
+
+    def to_safe_dict(self) -> Dict:
+        """Dict sin datos sensibles, apto para respuestas API"""
+        d = self.to_dict()
+        d.pop("hashed_password", None)
+        return d
 
 
 class ChatHistory(Base):
@@ -259,7 +266,6 @@ def update_user_last_login(user_id: int) -> bool:
     """Actualiza la fecha del último acceso del usuario"""
     try:
         with db_session() as db:
-            from sqlalchemy import select
             user = db.query(User).filter(User.id == user_id).first()
             if user:
                 user.last_login = datetime.now(timezone.utc)
@@ -289,4 +295,119 @@ def load_chat_history(limit: int = 1000, offset: int = 0) -> List[Dict]:
             return [h.to_dict() for h in history]
     except Exception as e:
         logger.error(f"Error cargando historial global: {e}")
+        return []
+
+
+def get_user_chat_history(username: str, limit: int = 50, offset: int = 0) -> List[Dict]:
+    """Historial de chats de un usuario específico"""
+    try:
+        with db_session() as db:
+            history = db.query(ChatHistory).filter(
+                ChatHistory.username == username
+            ).order_by(
+                ChatHistory.timestamp.desc()
+            ).offset(offset).limit(limit).all()
+            return [h.to_dict() for h in history]
+    except Exception as e:
+        logger.error(f"Error cargando historial de {username}: {e}")
+        return []
+
+
+def get_recent_sessions(username: str, days: int = 7) -> List[Dict]:
+    """Sesiones recientes de un usuario (agrupadas por session_id)"""
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        with db_session() as db:
+            sessions = db.query(
+                ChatHistory.session_id,
+                ChatHistory.message_type,
+                ChatHistory.timestamp
+            ).filter(
+                ChatHistory.username == username,
+                ChatHistory.timestamp > cutoff,
+                ChatHistory.session_id.isnot(None)
+            ).order_by(
+                ChatHistory.timestamp.desc()
+            ).all()
+
+            seen = {}
+            for s in sessions:
+                sid = s.session_id
+                if sid and sid not in seen:
+                    seen[sid] = {
+                        "session_id": sid,
+                        "message_type": s.message_type,
+                        "last_activity": s.timestamp.isoformat() if s.timestamp else None,
+                    }
+            return list(seen.values())
+    except Exception as e:
+        logger.error(f"Error obteniendo sesiones de {username}: {e}")
+        return []
+
+
+# ============================================================
+# FUNCIONES PARA ADMIN (SQL)
+# ============================================================
+
+def get_all_users_paginated(page: int = 1, limit: int = 20, search: str = None) -> Dict:
+    """Devuelve usuarios paginados con conteo de chats"""
+    try:
+        with db_session() as db:
+            query = db.query(User)
+            if search:
+                pattern = f"%{search}%"
+                query = query.filter(
+                    (User.username.ilike(pattern)) | (User.email.ilike(pattern))
+                )
+            total = query.count()
+            offset = (page - 1) * limit
+            users = query.order_by(User.created_at.desc()).offset(offset).limit(limit).all()
+
+            users_data = []
+            for u in users:
+                chat_count = db.query(ChatHistory).filter(
+                    ChatHistory.username == u.username
+                ).count()
+                last_chat = db.query(ChatHistory.timestamp).filter(
+                    ChatHistory.username == u.username
+                ).order_by(ChatHistory.timestamp.desc()).first()
+
+                d = u.to_safe_dict()
+                d["chat_count"] = chat_count
+                d["last_activity"] = last_chat[0].isoformat() if last_chat and last_chat[0] else None
+                users_data.append(d)
+
+            return {
+                "users": users_data,
+                "total": total,
+                "page": page,
+                "pages": max(1, (total + limit - 1) // limit),
+            }
+    except Exception as e:
+        logger.error(f"Error listando usuarios: {e}")
+        return {"users": [], "total": 0, "page": 1, "pages": 1}
+
+
+def get_activity_by_day(days: int = 7) -> List[Dict]:
+    """Actividad de chats agrupada por día"""
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        with db_session() as db:
+            chats = db.query(ChatHistory).filter(
+                ChatHistory.timestamp > cutoff
+            ).all()
+
+            activity_map: Dict[str, int] = {}
+            for c in chats:
+                if c.timestamp:
+                    day_str = c.timestamp.strftime("%Y-%m-%d")
+                    activity_map[day_str] = activity_map.get(day_str, 0) + 1
+
+            result = []
+            for i in range(days):
+                date = (datetime.now(timezone.utc) - timedelta(days=days - i - 1)).strftime("%Y-%m-%d")
+                result.append({"date": date, "count": activity_map.get(date, 0)})
+            return result
+    except Exception as e:
+        logger.error(f"Error obteniendo actividad diaria: {e}")
         return []

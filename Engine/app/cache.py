@@ -466,29 +466,43 @@ def cache_key(*args, **kwargs) -> str:
 
 
 def cached_function(ttl: int = 3600, key_prefix: str = ""):
-    """Decorator for caching function results"""
+    """Decorator for caching function results (supports sync and async)"""
+    import asyncio
+    import functools
+
     def decorator(func):
-        def wrapper(*args, **kwargs):
-            cache = get_cache()
-            
-            # Generate cache key
-            func_key = f"{key_prefix or func.__name__}:{cache_key(*args, **kwargs)}"
-            
-            # Try to get from cache
-            cached_result = cache.get(func_key)
-            if cached_result is not None:
-                logger.debug(f"Cache hit para {func.__name__}")
-                return cached_result
-            
-            # Execute function
-            result = func(*args, **kwargs)
-            
-            # Store in cache
-            cache.set(func_key, result, ttl)
-            logger.debug(f"Cache miss para {func.__name__}, almacenado con TTL {ttl}s")
-            
-            return result
-        return wrapper
+        if asyncio.iscoroutinefunction(func):
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                cache = get_cache()
+                func_key = f"{key_prefix or func.__name__}:{cache_key(*args, **kwargs)}"
+
+                cached_result = cache.get(func_key)
+                if cached_result is not None:
+                    logger.debug(f"Cache hit para {func.__name__}")
+                    return cached_result
+
+                result = await func(*args, **kwargs)
+                cache.set(func_key, result, ttl)
+                logger.debug(f"Cache miss para {func.__name__}, almacenado con TTL {ttl}s")
+                return result
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                cache = get_cache()
+                func_key = f"{key_prefix or func.__name__}:{cache_key(*args, **kwargs)}"
+
+                cached_result = cache.get(func_key)
+                if cached_result is not None:
+                    logger.debug(f"Cache hit para {func.__name__}")
+                    return cached_result
+
+                result = func(*args, **kwargs)
+                cache.set(func_key, result, ttl)
+                logger.debug(f"Cache miss para {func.__name__}, almacenado con TTL {ttl}s")
+                return result
+            return sync_wrapper
     return decorator
 
 

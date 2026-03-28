@@ -3,7 +3,7 @@ User profile and additional functionality routes.
 """
 
 import logging
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta

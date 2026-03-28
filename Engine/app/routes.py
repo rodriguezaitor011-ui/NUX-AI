@@ -12,6 +12,7 @@ import io
 
 from app.config import settings
 from app.services.ai_orchestrator import process_document_pipeline, chat_with_document
+from app.cache import DocumentCache
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +51,8 @@ limiter = Limiter(key_func=get_remote_address)
 
 MODOS_VALIDOS = ["general", "estudiar", "corto", "profesional"]
 
-# ← Cache simple en memoria — sin dependencias externas
-document_cache = {}
+# Cache de documentos procesados con LRU y TTL (evita Memory Leak)
+document_cache = DocumentCache(max_size=200, ttl=3600)
 
 OCR_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
@@ -269,7 +270,7 @@ async def resumir(
                 "mindmap": resultado if task == "mindmap" else None,
                 "estructura": estructura,
                 "session_id": session_id,
-                "modelo": "NXUS o.0.1"
+                "modelo": settings.ENGINE_VERSION
             })
 
         return templates.TemplateResponse("index.html", {
@@ -283,7 +284,7 @@ async def resumir(
             "session_id": session_id,
             "error_msg": None,
             "processing_status": processing_status,
-            "modelo": "NXUS o.0.1"
+            "modelo": settings.ENGINE_VERSION
         })
 
     except ValueError as e:
@@ -382,7 +383,7 @@ async def chat_general_stream(request: Request):
                     {
                         "role": "system",
                         "content": (
-                            "Eres StudIA, un asistente de estudio inteligente y amigable. "
+                            "Eres NUX IA, un asistente de estudio inteligente y amigable. "
                             "Ayudas a los estudiantes con cualquier pregunta académica. "
                             "Usa Markdown para formatear tus respuestas."
                         )

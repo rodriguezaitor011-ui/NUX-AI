@@ -8,7 +8,7 @@ from app.config import settings
 if __name__ == "__main__":
     print(f"""
 ╔══════════════════════════════════════════╗
-║        🚀 Resumer IA - v2.0.0           ║
+║        🚀 NUX IA - v2.0.0               ║
 ╚══════════════════════════════════════════╝
 
 📍 Servidor: http://localhost:8000

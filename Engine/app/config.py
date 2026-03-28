@@ -61,7 +61,7 @@ class Settings:
     # App
     APP_NAME: str = "NUX IA"
     COMPANY_NAME: str = "NXUS"
-    ENGINE_VERSION: str = "NXUS o.0.1"
+    ENGINE_VERSION: str = "NXUS 0.0.1"
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
 
     @classmethod

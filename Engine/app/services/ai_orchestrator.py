@@ -694,7 +694,7 @@ async def chat_with_document(
                         {
                             "role": "system",
                             "content": (
-                                "Eres StudIA, un asistente académico experto. "
+                                "Eres NUX IA, un asistente académico experto. "
                                 "Responde de forma clara, precisa y educativa. "
                                 "Usa Markdown para formatear tus respuestas."
                             )

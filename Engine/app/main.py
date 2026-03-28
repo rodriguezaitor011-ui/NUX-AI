@@ -72,6 +72,8 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(router)
 from app.admin_routes import router as admin_router
 app.include_router(admin_router, prefix="/admin", tags=["admin"])
+from app.user_routes import router as user_router
+app.include_router(user_router, tags=["users"])
 
 # Middleware de Seguridad y Logs corregido
 @app.middleware("http")

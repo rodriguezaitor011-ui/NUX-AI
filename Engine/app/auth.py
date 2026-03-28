@@ -10,7 +10,6 @@ import uuid
 import os
 import json
 import threading
-import tempfile
 import shutil
 from app.config import settings
 
