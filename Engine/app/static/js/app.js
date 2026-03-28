@@ -134,6 +134,13 @@ function addSource(input) {
 function renderSources() {
     const sourcesList = document.getElementById('sources-list');
     const emptyState = document.getElementById('empty-sources');
+    
+    // Null-safe checks
+    if (!sourcesList || !emptyState) {
+        console.warn('renderSources: sources-list or empty-sources element not found');
+        return;
+    }
+    
     if (sources.length === 0) {
         emptyState.style.display = 'block';
         sourcesList.innerHTML = '';
@@ -885,7 +892,17 @@ function añadirOutput(tipo, nombre, contenido) {
 function renderOutputs() {
     const outputSection = document.getElementById('tool-outputs');
     const outputList = document.getElementById('output-list');
-    if (toolOutputs.length === 0) { outputSection.style.display = 'none'; return; }
+    
+    // Null-safe checks
+    if (!outputSection || !outputList) {
+        console.warn('renderOutputs: tool-outputs or output-list element not found');
+        return;
+    }
+    
+    if (toolOutputs.length === 0) { 
+        outputSection.style.display = 'none'; 
+        return; 
+    }
     outputSection.style.display = 'block';
     const iconos = { 'resumir': '📝', 'flashcards': '🎴', 'analizar': '📊' };
     outputList.innerHTML = toolOutputs.slice(-5).reverse().map(output => `

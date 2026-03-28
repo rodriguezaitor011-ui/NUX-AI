@@ -361,8 +361,8 @@ if (!token || !username) {
 </style>
 
 <input type="hidden" id="session-id" value="{{ session_id }}">
-<script src="/static/js/i18n.js"></script>
-<script src="/static/js/app.js"></script>
+<script src="/static/js/i18n.js" defer></script>
+<script src="/static/js/app.js" defer></script>
 <script>
 lucide.createIcons();
 if(username){document.getElementById('user-badge').textContent=username}

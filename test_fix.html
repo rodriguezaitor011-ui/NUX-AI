@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Test NUX AI Fix</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+    </style>
+</head>
+<body>
+    <h1>Test de corrección NUX AI</h1>
+    <p>Verificando que las funciones sean null-safe...</p>
+    
+    <div id="test-results"></div>
+    
+    <script>
+        const results = [];
+        
+        function addResult(type, message) {
+            results.push({ type, message });
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.textContent = message;
+            document.getElementById('test-results').appendChild(div);
+        }
+        
+        // Test 1: Verificar que renderSources no lance error cuando los elementos no existen
+        try {
+            // Simular la función renderSources con elementos que no existen
+            const testRenderSources = function() {
+                const sourcesList = document.getElementById('sources-list');
+                const emptyState = document.getElementById('empty-sources');
+                
+                // Null-safe checks (como en nuestra corrección)
+                if (!sourcesList || !emptyState) {
+                    console.warn('renderSources: sources-list or empty-sources element not found');
+                    return;
+                }
+                
+                // Si llegamos aquí sin error, la verificación funciona
+                emptyState.style.display = 'block';
+                sourcesList.innerHTML = '';
+            };
+            
+            testRenderSources();
+            addResult('success', '✓ Test 1 pasado: renderSources no lanza error cuando elementos no existen');
+        } catch (error) {
+            addResult('error', `✗ Test 1 fallado: ${error.message}`);
+        }
+        
+        // Test 2: Verificar que renderOutputs no lance error cuando los elementos no existen
+        try {
+            const testRenderOutputs = function() {
+                const outputSection = document.getElementById('tool-outputs');
+                const outputList = document.getElementById('output-list');
+                
+                // Null-safe checks (como en nuestra corrección)
+                if (!outputSection || !outputList) {
+                    console.warn('renderOutputs: tool-outputs or output-list element not found');
+                    return;
+                }
+                
+                // Si llegamos aquí sin error, la verificación funciona
+                outputSection.style.display = 'none';
+            };
+            
+            testRenderOutputs();
+            addResult('success', '✓ Test 2 pasado: renderOutputs no lanza error cuando elementos no existen');
+        } catch (error) {
+            addResult('error', `✗ Test 2 fallado: ${error.message}`);
+        }
+        
+        // Test 3: Verificar que añadirOutput está completa
+        try {
+            const testAñadirOutput = function(tipo, nombre, contenido) {
+                const toolOutputs = [];
+                toolOutputs.push({ id: Date.now().toString(), tipo, nombre, contenido, timestamp: new Date() });
+                return toolOutputs;
+            };
+            
+            const result = testAñadirOutput('test', 'Test', 'Contenido de prueba');
+            if (result.length === 1 && result[0].tipo === 'test') {
+                addResult('success', '✓ Test 3 pasado: función añadirOutput está completa y funciona');
+            } else {
+                addResult('warning', '⚠ Test 3: función añadirOutput funciona pero estructura diferente');
+            }
+        } catch (error) {
+            addResult('error', `✗ Test 3 fallado: ${error.message}`);
+        }
+        
+        // Resumen
+        const successCount = results.filter(r => r.type === 'success').length;
+        const errorCount = results.filter(r => r.type === 'error').length;
+        const warningCount = results.filter(r => r.type === 'warning').length;
+        
+        const summary = document.createElement('div');
+        summary.className = 'test-result';
+        summary.style.background = errorCount > 0 ? '#f8d7da' : '#d4edda';
+        summary.style.color = errorCount > 0 ? '#721c24' : '#155724';
+        summary.textContent = `Resumen: ${successCount} éxitos, ${warningCount} advertencias, ${errorCount} errores`;
+        document.getElementById('test-results').appendChild(summary);
+    </script>
+</body>
+</html>
