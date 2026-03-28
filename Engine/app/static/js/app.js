@@ -762,9 +762,15 @@ async function ejecutarHerramienta(herramienta) {
         'analizar': '📊 Analiza la estructura y conceptos clave'
     };
     const mensaje = mensajesHerramienta[herramienta] || `Ejecutar: ${herramienta}`;
-    agregarMensajeUsuario(mensaje);
+    let msjCarga = 'Procesando...';
+    if (herramienta === 'resumir') msjCarga = 'Generando resumen ejecutivo...';
+    if (herramienta === 'flashcards') msjCarga = 'Creando tarjetas de estudio...';
+    if (herramienta === 'quiz') msjCarga = 'Generando cuestionario de evaluación...';
+    if (herramienta === 'report') msjCarga = 'Analizando evidencia y creando Guía...';
+
+    mostrarIndicador(msjCarga);
     updateProcessingStatus(true);
-    mostrarIndicador(`Ejecutando ${herramienta}...`);
+
     try {
         const fuentesActivas = sources.filter(s => activeSources.includes(s.id));
         const formData = new FormData();
@@ -784,13 +790,23 @@ async function ejecutarHerramienta(herramienta) {
             }
             formData.append('texto', contenido);
         }
-        formData.append('modo', herramienta === 'resumir' ? 'general' : 'estudiar');
-        formData.append('task', herramienta === 'flashcards' ? 'flashcards' : 'summary');
+
+        // Mapeo dinámico de tareas
+        let task = 'summary';
+        if (herramienta === 'flashcards') task = 'flashcards';
+        if (herramienta === 'quiz') task = 'quiz';
+        if (herramienta === 'report') task = 'report';
+
+        formData.append('modo', (herramienta === 'resumir' || herramienta === 'report') ? 'general' : 'estudiar');
+        formData.append('task', task);
         if (notebookId) formData.append('notebook_id', notebookId);
         
         const response = await fetch('/resumir', {
             method: 'POST',
-            headers: { 'Accept': 'application/json' },
+            headers: { 
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+            },
             body: formData
         });
         const data = await response.json();

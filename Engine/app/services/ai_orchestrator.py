@@ -623,6 +623,92 @@ Empieza con ```mermaid y termina con ```
         
         return mindmap
 
+    async def generate_quiz(self, summary: str, structure: Dict) -> Optional[str]:
+        """Genera un cuestionario de opción múltiple (A, B, C, D)."""
+        logger.info("❓ Generando cuestionario con Llama 3.3 70B...")
+        
+        prompt = f"""Eres un experto pedagogo creando evaluaciones académicas.
+        
+        TEMA: {structure.get('tema_principal', 'N/A')}
+        
+        Tu tarea: Crear un cuestionario de OPCIÓN MÚLTIPLE de 10 preguntas basado exclusivamente en este contenido.
+        
+        REGLAS:
+        1. Genera 10 preguntas.
+        2. Cada pregunta debe tener 4 opciones (A, B, C, D).
+        3. Solo una opción es correcta.
+        4. Al final del documento, incluye una sección de 'CLAVE DE RESPUESTAS CORRECCCIÓN'.
+        5. Tono profesional y educativo.
+        6. Usa Markdown para el formato.
+        
+        FORMATO:
+        ### 📝 Cuestionario de Evaluación: {structure.get('tema_principal', 'Tema')}
+        
+        1. **[Pregunta]**
+           A) [Opción]
+           B) [Opción]
+           C) [Opción]
+           D) [Opción]
+        
+        [... y así hasta la 10]
+        
+        ---
+        ### ✅ CLAVE DE RESPUESTAS
+        1-A, 2-C..."""
+
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Contenido base:\n\n{summary}"}
+        ]
+        
+        return await self._call_groq(
+            model=self.MODELS["chief_editor"],
+            messages=messages,
+            max_tokens=2500,
+            temperature=0.6
+        )
+
+    async def generate_notebook_guide(self, summary: str, structure: Dict) -> Optional[str]:
+        """Genera una Guía de Cuaderno estilo NotebookLM (FAQ, Índice, Análisis)."""
+        logger.info("📘 Generando Guía de Cuaderno con Llama 3.3 70B...")
+        
+        prompt = f"""Eres un asistente de investigación de élite. Tu objetivo es crear una 'Guía de Cuaderno' exhaustiva basada en la evidencia proporcionada.
+        
+        TEMA: {structure.get('tema_principal', 'N/A')}
+        
+        ESTRUCTURA REQUERIDA (en Markdown):
+        
+        # 📘 Guía Maestra de Cuaderno: {structure.get('tema_principal', 'Tema')}
+        
+        ## 📌 1. Resumen Ejecutivo
+        [Una síntesis de alto nivel que capture la esencia de toda la información]
+        
+        ## 🗂️ 2. Índice Temático y Estructura
+        [Un mapa jerárquico de cómo se organiza la información en los documentos fuente]
+        
+        ## ❓ 3. FAQ de Evidencia (Preguntas Frecuentes)
+        [Genera 5-7 preguntas complejas y respóndelas citando o basándote estrictamente en los datos. Evita generalidades.]
+        
+        ## 📖 4. Glosario de Conceptos Clave
+        [Una lista de los términos técnicos más importantes con sus definiciones según el contexto]
+        
+        REGLAS:
+        - CERO alucinaciones. Si algo no está en el texto, no lo incluyas.
+        - Usa un formato visualmente atractivo con negritas, listas y separadores.
+        - La guía debe ser el documento definitivo para entender el cuaderno."""
+
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Contenido analizado:\n\n{summary}"}
+        ]
+        
+        return await self._call_groq(
+            model=self.MODELS["chief_editor"],
+            messages=messages,
+            max_tokens=3500,
+            temperature=0.5
+        )
+
     async def generate_title_and_emoji(self, text: str) -> tuple[str, str, str]:
         """Usa IA para generar título corto, emoji y color base."""
         prompt = "Analiza el siguiente texto y genera un objeto JSON con 3 campos: 'title' (título corto de máximo 4 palabras), 'emoji' (un emoji representativo), y 'color' (elige SOLO UNA de estas opciones: 'blue', 'purple', 'pink', 'orange', 'green'). RESPONDE SOLO CON EL JSON VÁLIDO."
@@ -688,6 +774,28 @@ async def process_document_pipeline(
                     return None, structure, "Error al generar flashcards"
                 
                 return flashcards, structure, None
+            
+            elif task == "quiz":
+                summary = await orchestrator.generate_summary(compressed_text, structure, "general")
+                if not summary:
+                    return None, structure, "Error al generar resumen para cuestionario"
+                
+                quiz = await orchestrator.generate_quiz(summary, structure)
+                if not quiz:
+                    return None, structure, "Error al generar cuestionario"
+                
+                return quiz, structure, None
+
+            elif task == "report":
+                summary = await orchestrator.generate_summary(compressed_text, structure, "general")
+                if not summary:
+                    return None, structure, "Error al generar resumen para la guía"
+                
+                guide = await orchestrator.generate_notebook_guide(summary, structure)
+                if not guide:
+                    return None, structure, "Error al generar guía de cuaderno"
+                
+                return guide, structure, None
             
             else:
                 summary = await orchestrator.generate_summary(compressed_text, structure, modo)
