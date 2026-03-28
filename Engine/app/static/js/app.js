@@ -7,6 +7,7 @@
 let sources = [];
 let activeSources = [];
 let sessionId = null;
+let notebookId = null;
 let chatHistory = [];
 let currentTool = null;
 let chatMode = 'sources';
@@ -245,6 +246,8 @@ async function autoProcessSource(source) {
 
         formData.append('modo', 'general');
         formData.append('task', 'summary');
+        
+        if (notebookId) formData.append('notebook_id', notebookId);
 
         const response = await fetch('/resumir', {
             method: 'POST',
@@ -660,6 +663,7 @@ async function procesarMensaje(mensaje) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 session_id: sessionId,
+                notebook_id: notebookId,
                 question: mensaje,
                 mode: chatMode,
                 history: chatHistory.slice(-5)
@@ -755,6 +759,8 @@ async function ejecutarHerramienta(herramienta) {
         }
         formData.append('modo', herramienta === 'resumir' ? 'general' : 'estudiar');
         formData.append('task', herramienta === 'flashcards' ? 'flashcards' : 'summary');
+        if (notebookId) formData.append('notebook_id', notebookId);
+        
         const response = await fetch('/resumir', {
             method: 'POST',
             headers: { 'Accept': 'application/json' },

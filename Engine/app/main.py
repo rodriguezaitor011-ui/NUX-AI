@@ -74,6 +74,8 @@ from app.admin_routes import router as admin_router
 app.include_router(admin_router, prefix="/admin", tags=["admin"])
 from app.user_routes import router as user_router
 app.include_router(user_router, tags=["users"])
+from app.notebook_routes import router as notebook_router
+app.include_router(notebook_router, tags=["notebooks"])
 
 # Middleware de Seguridad y Logs corregido
 @app.middleware("http")

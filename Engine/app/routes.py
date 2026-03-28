@@ -44,6 +44,8 @@ from app.auth import (
     is_refresh_token_revoked,
     get_token_from_request,
 )
+from app.database import db_session, Notebook, NotebookDocument, ChatHistory
+from fastapi.responses import RedirectResponse
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -61,6 +63,11 @@ OCR_ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 # PÁGINAS
 # ============================================================
 
+def verify_and_redirect(request: Request):
+    token = request.cookies.get("access_token") # Por si lo dejamos en cookies o via fetch
+    # Normalmente el token va en header. En SSR es complejo, así que las validaremos con JS en frontend.
+    pass
+
 @router.get("/", response_class=HTMLResponse)
 async def landing_page(request: Request):
     return templates.TemplateResponse("landing.html", {"request": request})
@@ -72,8 +79,30 @@ async def login_page(request: Request):
 
 
 @router.get("/app", response_class=HTMLResponse)
-async def app_page(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def app_page(request: Request, notebook_id: Optional[int] = None):
+    context = {"request": request, "notebook_id": notebook_id}
+    
+    # Si viene notebook_id, podemos inyectar datos
+    if notebook_id:
+        try:
+            with db_session() as db:
+                notebook = db.query(Notebook).filter(Notebook.id == notebook_id).first()
+                if notebook:
+                    context["notebook_title"] = notebook.title
+                    context["notebook_emoji"] = notebook.emoji
+                    
+                    doc = db.query(NotebookDocument).filter(NotebookDocument.notebook_id == notebook_id).first()
+                    if doc:
+                        context["texto"] = doc.content
+                        if doc.structure:
+                            try:
+                                context["estructura"] = json.loads(doc.structure)
+                            except:
+                                pass
+        except Exception as e:
+            logger.error(f"Error cargando notebook en /app: {e}")
+            
+    return templates.TemplateResponse("index.html", context)
 
 
 @router.get("/privacy", response_class=HTMLResponse)
@@ -205,7 +234,8 @@ async def resumir(
     instrucciones: str = Form(""),
     modo: str = Form("general"),
     task: str = Form("summary"),
-    archivo: UploadFile = File(None)
+    archivo: UploadFile = File(None),
+    notebook_id: Optional[int] = Form(None)
 ):
     processing_status = []
 
@@ -261,6 +291,41 @@ async def resumir(
                 "original_text": datos.texto[:5000]
             }
             logger.info(f"💾 Sesión guardada en caché: {session_id}")
+            
+            # Si pasaron un notebook_id, actualizamos su estructura y guardamos el resumen como primer mensaje
+            if notebook_id:
+                try:
+                    with db_session() as db:
+                        doc = db.query(NotebookDocument).filter(NotebookDocument.notebook_id == notebook_id).first()
+                        if doc:
+                            doc.structure = json.dumps(estructura, ensure_ascii=False)
+                            db.commit()
+                        
+                        # Aprovechar token para ver quién es
+                        token = get_token_from_request(request)
+                        username = None
+                        user_id = None
+                        if token:
+                            payload = decode_token(token)
+                            if payload:
+                                u = get_user_by_email(payload.get("email"))
+                                if u:
+                                    username = u['username']
+                                    user_id = u['id']
+                        
+                        if username:
+                            from app.database import create_user # No ideal, pero usar ChatHistory
+                            chat = ChatHistory(
+                                user_id=user_id,
+                                username=username,
+                                message=f"Analiza este cuaderno y dame un resumen (modo: {modo}, tarea: {task}).",
+                                response=resultado,
+                                notebook_id=notebook_id,
+                                message_type="system_auto"
+                            )
+                            db.add(chat)
+                except Exception as e:
+                    logger.error(f"Error actualizando db cuaderno tras resumen: {e}")
 
         if request.headers.get("X-Requested-With") == "XMLHttpRequest" or \
            request.headers.get("Accept", "").startswith("application/json"):
@@ -282,6 +347,7 @@ async def resumir(
             "flashcards": resultado if task == "flashcards" else None,
             "estructura": estructura,
             "session_id": session_id,
+            "notebook_id": notebook_id,
             "error_msg": None,
             "processing_status": processing_status,
             "modelo": settings.ENGINE_VERSION
@@ -307,6 +373,8 @@ async def chat_endpoint(request: Request):
 
         question = raw.get("question", "").strip()
         session_id = str(raw.get("session_id")) if raw.get("session_id") else None
+        notebook_id_raw = raw.get("notebook_id")
+        notebook_id = int(notebook_id_raw) if notebook_id_raw else None
         mode = raw.get("mode", "sources")
         history = raw.get("history", [])
 
@@ -314,13 +382,32 @@ async def chat_endpoint(request: Request):
             return JSONResponse(status_code=400, content={"error": "La pregunta no puede estar vacía"})
 
         logger.info(
-            f"Chat | mode={mode} | session={session_id} | "
+            f"Chat | mode={mode} | session={session_id} | notebook={notebook_id} | "
             f"cache_size={len(document_cache)} | "
             f"question={question[:50]}..."
         )
 
         doc_context = None
-        if session_id:
+        if notebook_id:
+            # Si hay notebook_id, forzamos recuperar del notebook!
+            try:
+                with db_session() as db:
+                    doc = db.query(NotebookDocument).filter(NotebookDocument.notebook_id == notebook_id).first()
+                    if doc:
+                        doc_context = {
+                            "summary": "",
+                            "structure": json.loads(doc.structure) if doc.structure else {},
+                            "original_text": doc.content[:15000] # Limite temporal
+                        }
+                        
+                        # Buscar los últimos mensajes del historial del notebook como resumen para Deepseek
+                        last_chats = db.query(ChatHistory).filter(ChatHistory.notebook_id == notebook_id).order_by(ChatHistory.timestamp.asc()).all()
+                        if last_chats and not doc_context["summary"]:
+                            doc_context["summary"] = "\n".join([c.response for c in last_chats if c.message_type == "system_auto"][:1])
+            except Exception as e:
+                logger.error(f"Error recuperando doc de cuaderno: {e}")
+                
+        if session_id and not doc_context:
             if session_id in document_cache:
                 doc_context = document_cache[session_id]
                 logger.info(f"✅ Contexto encontrado para sesión {session_id}")
@@ -347,6 +434,9 @@ async def chat_endpoint(request: Request):
             mode=mode,
             history=history or []
         )
+        
+        # Opcional: Auto-save a notebook_id aquí en vez de desde UI si el header Auth existe.
+        # Pero es más fácil hacerlo en app.js haciendo el segundo call a `/save-chat` por ahora o dejarlo así para simplificar
 
         return JSONResponse(content={
             "answer": response_text,
@@ -588,7 +678,12 @@ async def save_chat(request: Request):
         if not user:
             return JSONResponse(status_code=401, content={"error": "Usuario no encontrado"})
 
-        save_chat_message(username=user['username'], message=message, response=response)
+        # Respetar el notebook_id de la request
+        notebook_id = int(data.get("notebook_id")) if data.get("notebook_id") else None
+
+        from app.database import create_user # fake import inside check just to ensure it's loaded 
+        from app.database import save_chat_message
+        save_chat_message(username=user['username'], message=message, response=response, notebook_id=notebook_id)
         return JSONResponse(content={"success": True})
 
     except Exception as e:

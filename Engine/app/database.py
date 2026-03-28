@@ -11,7 +11,7 @@ from contextlib import contextmanager
 
 from sqlalchemy import (
     create_engine, Column, Integer, String,
-    Boolean, DateTime, Text, Index, text
+    Boolean, DateTime, Text, Index, text, ForeignKey
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool, QueuePool
@@ -93,6 +93,47 @@ class User(Base):
         return d
 
 
+class Notebook(Base):
+    __tablename__ = "notebooks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), index=True, nullable=False)
+    title = Column(String(255), nullable=False)
+    emoji = Column(String(10), nullable=True, default="📓")
+    color = Column(String(50), nullable=True, default="blue")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self) -> Dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "emoji": self.emoji,
+            "color": self.color,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+class NotebookDocument(Base):
+    __tablename__ = "notebook_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    notebook_id = Column(Integer, ForeignKey('notebooks.id', ondelete='CASCADE'), index=True, nullable=False)
+    filename = Column(String(255), nullable=True)
+    content = Column(Text, nullable=False)
+    structure = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self) -> Dict:
+        return {
+            "id": self.id,
+            "notebook_id": self.notebook_id,
+            "filename": self.filename,
+            "content": self.content[:500] + "..." if self.content and len(self.content) > 500 else self.content,
+            "structure": self.structure,
+        }
+
 class ChatHistory(Base):
     __tablename__ = "chat_history"
 
@@ -103,6 +144,7 @@ class ChatHistory(Base):
     response = Column(Text, nullable=False)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     session_id = Column(String(100), nullable=True, index=True)
+    notebook_id = Column(Integer, ForeignKey('notebooks.id', ondelete='CASCADE'), nullable=True, index=True)
     message_type = Column(String(20), default="chat")
 
     __table_args__ = (
@@ -120,6 +162,7 @@ class ChatHistory(Base):
             "response": self.response[:500] + "..." if len(self.response) > 500 else self.response,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
             "session_id": self.session_id,
+            "notebook_id": self.notebook_id,
             "message_type": self.message_type,
         }
 
@@ -134,6 +177,13 @@ def init_db():
     for attempt in range(max_retries):
         try:
             Base.metadata.create_all(bind=engine)
+            # Intento manual de agregar la columna por si la tabla ya existía
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE chat_history ADD COLUMN notebook_id INTEGER REFERENCES notebooks(id) ON DELETE CASCADE;"))
+            except Exception:
+                pass # Ya existe o el driver no lo permite así, lo ignoramos
+
             logger.info("✅ Tablas inicializadas correctamente")
             return
         except Exception as e:
@@ -238,7 +288,7 @@ def get_database_stats() -> Dict:
 # HISTORIAL DE CHAT
 # ============================================================
 
-def save_chat_message(username: str, message: str, response: str, session_id: str = None, message_type: str = "chat") -> Optional[Dict]:
+def save_chat_message(username: str, message: str, response: str, session_id: str = None, notebook_id: int = None, message_type: str = "chat") -> Optional[Dict]:
     try:
         with db_session() as db:
             user = db.query(User).filter(User.username == username).first()
@@ -248,6 +298,7 @@ def save_chat_message(username: str, message: str, response: str, session_id: st
                 message=message,
                 response=response,
                 session_id=session_id,
+                notebook_id=notebook_id,
                 message_type=message_type,
             )
             db.add(chat)

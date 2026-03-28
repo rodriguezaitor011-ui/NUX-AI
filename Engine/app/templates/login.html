@@ -256,8 +256,8 @@ async function handleSubmit(e) {
             localStorage.setItem('user_id', data.user.id);
             localStorage.setItem('user_is_pro', data.user.is_pro);
             
-            // Redirect a app
-            window.location.href = '/app';
+            // Redirect a Mis Cuadernos
+            window.location.href = '/notebooks';
         } else {
             showError(data.error || 'Error al procesar la solicitud');
             submitBtn.disabled = false;

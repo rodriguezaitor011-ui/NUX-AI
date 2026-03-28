@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis Cuadernos - NUX IA</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+    <!-- Glassmorphism Main CSS (usa el mismo layout del index) -->
+    <link rel="stylesheet" href="/static/css/glassmorphism.css">
+    
+    <style>
+        body {
+            font-family: 'Manrope', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Nav */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(18, 18, 18, 0.6);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, rgba(255,255,255,0.7));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary {
+            background: var(--accent-gradient);
+            border: none;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(255, 143, 112, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 143, 112, 0.4);
+        }
+
+        /* Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+            flex: 1;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .header-section {
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.8s ease;
+        }
+
+        .header-section h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header-section p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        /* Grid */
+        .notebook-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 2rem;
+            perspective: 1000px; /* Para el efecto 3D */
+        }
+
+        /* Tarjeta de Cuaderno */
+        .notebook-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2rem;
+            cursor: pointer;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            transition: transform 0.1s; /* Rápido para el mousemove */
+            transform-style: preserve-3d;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            min-height: 220px;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .notebook-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--card-color, var(--accent-gradient));
+            opacity: 0.8;
+        }
+
+        /* Efecto highlight en hover estilo cristal */
+        .notebook-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            transform: translateZ(20px);
+        }
+
+        .notebook-card:hover::after {
+            opacity: 1;
+        }
+
+        .card-emoji {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            transform: translateZ(30px); /* Sale hacia afuera en hover */
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+            transform: translateZ(20px);
+        }
+
+        .card-meta {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: auto;
+            transform: translateZ(10px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* New Notebook Card */
+        .new-notebook {
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px dashed var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: var(--text-secondary);
+            transition: all 0.3s ease;
+        }
+
+        .new-notebook:hover {
+            border-color: #ff8f70;
+            color: var(--text-primary);
+            background: rgba(255, 143, 112, 0.05);
+            transform: translateY(-5px);
+        }
+
+        .new-notebook i {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: inherit;
+        }
+
+        /* Modal Subida */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 500px;
+            transform: scale(0.95) translateY(20px);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .modal-overlay.active .modal-content {
+            transform: scale(1) translateY(0);
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .close-modal:hover {
+            color: white;
+        }
+
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 16px;
+            padding: 3rem 2rem;
+            text-align: center;
+            margin-top: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            border-color: #ff8f70;
+            background: rgba(255, 143, 112, 0.05);
+        }
+
+        .upload-area i {
+            font-size: 3rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .upload-area input[type="file"] {
+            display: none;
+        }
+
+        .loader {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 143, 112, 0.3);
+            border-radius: 50%;
+            border-top-color: #ff8f70;
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Efecto esqueleto para carga inicial */
+        .skeleton {
+            animation: pulse 1.5s infinite ease-in-out;
+            background: linear-gradient(90deg, var(--glass-border) 25%, rgba(255,255,255,0.1) 50%, var(--glass-border) 75%);
+            background-size: 200% 100%;
+        }
+
+        @keyframes pulse {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="dark-theme"> <!-- Forzamos dark theme por el diseño, o lo leemos -->
+
+    <nav>
+        <div class="logo">
+            <i class="ri-brain-line" style="color: #ff8f70;"></i> NUX IA
+        </div>
+        <div class="user-actions">
+            <span id="usernameDisplay" style="color: var(--text-secondary); margin-right: 15px;"></span>
+            <button class="btn-outline" onclick="logout()"><i class="ri-logout-box-r-line"></i> Salir</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header-section">
+            <h1>Tus Cuadernos de Estudio</h1>
+            <p>Organiza tus apuntes, resúmenes y chats por materias o temas.</p>
+        </div>
+
+        <div class="notebook-grid" id="notebooksGrid">
+            <!-- Nuevo Cuaderno -->
+            <div class="notebook-card new-notebook" onclick="openNewNotebookModal()" style="transform: none;">
+                <i class="ri-add-line"></i>
+                <h3 class="card-title">Nuevo Cuaderno</h3>
+                <p style="font-size: 0.85rem; margin-top: 5px;">Sube un PDF o texto</p>
+            </div>
+            
+            <!-- Aquí se inyectan dinámicamente -->
+        </div>
+    </div>
+
+    <!-- Modal Nuevo Cuaderno -->
+    <div class="modal-overlay" id="uploadModal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeNewNotebookModal()"><i class="ri-close-line"></i></button>
+            <h2>Crear Nuevo Cuaderno</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">Sube tu documento y NUX IA preparará tu espacio de estudio.</p>
+            
+            <form id="createNotebookForm">
+                <div class="upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                    <i class="ri-upload-cloud-2-line"></i>
+                    <h3 style="margin: 0; font-weight: 600;">Haz clic o arrastra un archivo</h3>
+                    <p style="margin: 5px 0 0; color: var(--text-secondary); font-size: 0.9rem;">PDF, TXT soportados</p>
+                    <input type="file" id="fileInput" name="archivo" accept=".pdf,.txt">
+                </div>
+                
+                <!-- O entrada de texto -->
+                <div style="margin-top: 20px; text-align: center;">
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">O pega tu texto directamente:</p>
+                    <textarea name="texto" id="textInput" rows="4" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; color: white; resize: vertical; box-sizing: border-box; margin-top: 10px;" placeholder="Pega los apuntes aquí..."></textarea>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+                    <button type="submit" class="btn-primary" id="submitBtn" style="width: 100%; padding: 12px;">Analizar y Crear</button>
+                </div>
+
+                <div class="loader" id="creationLoader">
+                    <div class="spinner"></div>
+                    <div>Analizando estructura y generando entorno...</div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Check Auth
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Recuperar user (opcional si lo guardaste en localstorage, si no lo extraemos del token o api profile)
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            document.getElementById('usernameDisplay').innerText = JSON.parse(userStr).username;
+        }
+
+        // Cargar Notebooks
+        async function fetchNotebooks() {
+            try {
+                const response = await fetch('/api/notebooks', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.status === 401) {
+                    logout();
+                    return;
+                }
+
+                const data = await response.json();
+                renderNotebooks(data.notebooks || []);
+            } catch (err) {
+                console.error("Error fetching notebooks", err);
+            }
+        }
+
+        function renderNotebooks(notebooks) {
+            const grid = document.getElementById('notebooksGrid');
+            // Mantener el botón de nuevo
+            grid.innerHTML = `
+                <div class="notebook-card new-notebook" onclick="openNewNotebookModal()" style="transform: none;">
+                    <i class="ri-add-line"></i>
+                    <h3 class="card-title">Nuevo Cuaderno</h3>
+                    <p style="font-size: 0.85rem; margin-top: 5px;">Sube un PDF o texto</p>
+                </div>
+            `;
+
+            notebooks.forEach(nb => {
+                const date = new Date(nb.updated_at || nb.created_at).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
+                const cardColor = nb.color || 'var(--accent-gradient)';
+                
+                const card = document.createElement('a');
+                card.href = `/app?notebook_id=${nb.id}`;
+                card.className = 'notebook-card';
+                card.style.setProperty('--card-color', cardColor);
+                card.innerHTML = `
+                    <div class="card-emoji">${nb.emoji || '📓'}</div>
+                    <div class="card-title">${nb.title}</div>
+                    <div class="card-meta">
+                        <span>Editado: ${date}</span>
+                        <button onclick="deleteNotebook(${nb.id}, event)" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 5px;">
+                            <i class="ri-delete-bin-line"></i>
+                        </button>
+                    </div>
+                `;
+                
+                // Efecto 3D Tilt
+                card.addEventListener('mousemove', (e) => {
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    
+                    const rotateX = ((y - centerY) / centerY) * -10;
+                    const rotateY = ((x - centerX) / centerX) * 10;
+                    
+                    card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+                });
+
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
+                });
+
+                grid.appendChild(card);
+            });
+        }
+
+        // Modal Logic
+        function openNewNotebookModal() {
+            document.getElementById('uploadModal').classList.add('active');
+        }
+
+        function closeNewNotebookModal() {
+            document.getElementById('uploadModal').classList.remove('active');
+            document.getElementById('createNotebookForm').reset();
+            document.getElementById('submitBtn').style.display = 'block';
+            document.getElementById('creationLoader').style.display = 'none';
+        }
+
+        // Dropzone interactions
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false)
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false)
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            fileInput.files = files;
+            updateDropzoneText(files[0].name);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if(fileInput.files.length > 0) {
+                updateDropzoneText(fileInput.files[0].name);
+            }
+        });
+
+        function updateDropzoneText(filename) {
+            dropZone.innerHTML = `
+                <i class="ri-file-text-line" style="color: #ff8f70;"></i>
+                <h3 style="margin: 0; font-weight: 600;">${filename}</h3>
+                <p style="margin: 5px 0 0; color: var(--text-secondary); font-size: 0.9rem;">Archivo seleccionado listo</p>
+            `;
+        }
+
+        // Form Submit
+        document.getElementById('createNotebookForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const file = fileInput.files[0];
+            const text = document.getElementById('textInput').value.trim();
+            
+            if (!file && !text) {
+                alert('Por favor selecciona un archivo o pega un texto.');
+                return;
+            }
+
+            document.getElementById('submitBtn').style.display = 'none';
+            document.getElementById('creationLoader').style.display = 'flex';
+
+            const formData = new FormData();
+            if (file) formData.append('archivo', file);
+            if (text) formData.append('texto', text);
+
+            try {
+                const response = await fetch('/api/notebooks', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.notebook) {
+                    // Redirigir al área de estudio e indicar que procese
+                    window.location.href = `/app?notebook_id=${data.notebook.id}`;
+                } else {
+                    alert(data.error || 'Error creando cuaderno');
+                    closeNewNotebookModal();
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error de conexión');
+                closeNewNotebookModal();
+            }
+        });
+
+        async function deleteNotebook(id, event) {
+            event.preventDefault(); // Evita la navegación al hacer click en el enlace
+            event.stopPropagation();
+            
+            if(confirm("¿Seguro que quieres eliminar este cuaderno? Se perderá el historial de chat.")) {
+                try {
+                    const response = await fetch(`/api/notebooks/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    if (response.ok) {
+                        fetchNotebooks();
+                    }
+                } catch (e) {
+                    console.error("Error elimnando", e);
+                }
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        }
+
+        // Init
+        fetchNotebooks();
+    </script>
+</body>
+</html>

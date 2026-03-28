@@ -34,6 +34,9 @@ if (!token || !username) {
         <div class="logo">
             <i data-lucide="brain"></i> NUX AI
         </div>
+        <button class="btn-outline" style="margin-left: 15px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 5px 12px; cursor: pointer; display: flex; align-items: center; gap: 5px;" onclick="window.location.href='/notebooks'">
+            <i data-lucide="library" style="width: 16px; height: 16px;"></i> Mis Cuadernos
+        </button>
     </div>
     <div class="header-right">
         <div class="user-badge" id="user-badge">Cargando...</div>
@@ -365,6 +368,7 @@ if (!token || !username) {
 </style>
 
 <input type="hidden" id="session-id" value="{{ session_id }}">
+<input type="hidden" id="notebook-id" value="{{ notebook_id or '' }}">
 <script src="/static/js/i18n.js" defer></script>
 <script src="/static/js/app.js" defer></script>
 <script>
@@ -381,8 +385,78 @@ function updateProcessingStatus(p){const l=document.getElementById('status-left'
 <script>
 function updateHighlightsBadge(){const b=document.getElementById('highlights-badge');if(b&&typeof highlights!=='undefined'){const c=highlights.length;b.textContent=c;b.style.display=c>0?'block':'none'}}
 const originalSaveHighlights=typeof saveHighlights!=='undefined'?saveHighlights:()=>{};
-saveHighlights=function(){originalSaveHighlights();updateHighlightsBadge()};
 setTimeout(updateHighlightsBadge,1000);
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const nbInput = document.getElementById('notebook-id');
+    if (nbInput && nbInput.value) {
+        if(typeof notebookId !== 'undefined') {
+            notebookId = nbInput.value;
+        } else {
+            window.notebookId = nbInput.value;
+        }
+        console.log("Notebook ID detectado:", notebookId);
+        
+        try {
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch('/api/notebooks/' + notebookId, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await response.json();
+            
+            if (response.ok && data.document) {
+                // Populate source
+                const title = data.notebook ? data.notebook.title : 'Documento Base';
+                const source = {
+                    id: "nb-doc",
+                    name: title,
+                    type: "txt",
+                    active: true,
+                    content: data.document.content,
+                    processed: true 
+                };
+                if(typeof sources !== 'undefined') {
+                    sources.push(source);
+                    activeSources.push("nb-doc");
+                    renderSources();
+                }
+
+                // Remove welcome message
+                const welcome = document.querySelector('.welcome-message');
+                if (welcome) welcome.style.display = 'none';
+
+                // Populate chat history
+                if (data.chats && data.chats.length > 0) {
+                    data.chats.forEach(chat => {
+                        if (chat.message_type === "chat") {
+                            agregarMensajeUsuario(chat.message, false); // assuming we have a silent flag or we just push HTML
+                            // Actually it's easier to just call the UI functions
+                            agregarMensajeAsistente(chat.response, 'Historial');
+                            chatHistory.push({pregunta: chat.message, respuesta: chat.response});
+                        }
+                    });
+                    setTimeout(() => {
+                        const cm = document.getElementById('chat-messages');
+                        if(cm) cm.scrollTop = cm.scrollHeight;
+                    }, 500);
+                }
+
+                // Verificar si falta procesar estructura
+                try {
+                    const struct = JSON.parse(data.document.structure || '{}');
+                    if (struct.info && struct.info.includes("pendiente")) {
+                        source.processed = false;
+                        if(typeof autoProcessSource !== 'undefined') {
+                            autoProcessSource(source);
+                        }
+                    }
+                } catch(e){}
+            }
+        } catch(e) {
+            console.error("Error cargando notebook", e);
+        }
+    }
+});
 </script>
 </body>
 </html>
