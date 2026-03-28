@@ -1,28 +1,28 @@
 """
 Database module — PostgreSQL con SQLAlchemy
-Migrado desde JSON files a Supabase PostgreSQL
+Optimizado para Supabase y robustez en errores 500/401
 """
 
 import logging
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict
 from contextlib import contextmanager
 
 from sqlalchemy import (
     create_engine, Column, Integer, String,
-    Boolean, DateTime, Text, Index, event,
-    text
+    Boolean, DateTime, Text, Index, text
 )
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool, QueuePool
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
+from sqlalchemy.exc import SQLAlchemyError, OperationalError, IntegrityError
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# ENGINE — detecta SQLite (local) vs PostgreSQL (producción)
+# ENGINE — Configuración de conexión
 # ============================================================
 
 DATABASE_URL = settings.DATABASE_URL
@@ -36,13 +36,13 @@ if DATABASE_URL.startswith("sqlite"):
     )
     logger.info("✅ Usando SQLite para desarrollo local")
 else:
+    # Soporte para Render/Heroku que usan postgres://
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-        logger.info("✅ URL de PostgreSQL normalizada")
-
+    
     engine = create_engine(
         DATABASE_URL,
-        pool_pre_ping=True,
+        pool_pre_ping=True,  # Verifica conexión antes de usarla (evita 500s por timeout)
         pool_size=10,
         max_overflow=20,
         pool_recycle=1800,
@@ -71,7 +71,6 @@ class User(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_login = Column(DateTime, nullable=True)
 
-    # ✅ Solo índices estáticos — sin funciones no-immutable
     __table_args__ = (
         Index('idx_user_created_at', 'created_at'),
     )
@@ -81,7 +80,6 @@ class User(Base):
             "id": self.id,
             "username": self.username,
             "email": self.email,
-            "hashed_password": self.hashed_password,
             "is_admin": self.is_admin,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,
@@ -100,7 +98,6 @@ class ChatHistory(Base):
     session_id = Column(String(100), nullable=True, index=True)
     message_type = Column(String(20), default="chat")
 
-    # ✅ Solo índices estáticos — sin NOW() ni funciones dinámicas
     __table_args__ = (
         Index('idx_chat_user_timestamp', 'user_id', 'timestamp'),
         Index('idx_chat_username_timestamp', 'username', 'timestamp'),
@@ -121,165 +118,125 @@ class ChatHistory(Base):
 
 
 # ============================================================
-# CREAR TABLAS AL ARRANCAR
+# GESTIÓN DE SESIONES Y DB
 # ============================================================
 
 def init_db():
-    """Crea las tablas si no existen. Se llama en el lifespan de FastAPI."""
+    """Inicializa tablas con reintentos para evitar fallos en el despliegue"""
     max_retries = 3
-    retry_delay = 2
-
     for attempt in range(max_retries):
         try:
             Base.metadata.create_all(bind=engine)
-            logger.info("✅ Tablas de base de datos inicializadas correctamente")
+            logger.info("✅ Tablas inicializadas correctamente")
             return
-
-        except OperationalError as e:
-            if attempt < max_retries - 1:
-                logger.warning(
-                    f"⚠️ Error de conexión (intento {attempt + 1}/{max_retries}): {e}"
-                )
-                import time
-                time.sleep(retry_delay * (attempt + 1))
-                continue
-            else:
-                logger.error(
-                    f"❌ Error inicializando base de datos después de {max_retries} intentos: {e}"
-                )
-                raise
         except Exception as e:
-            logger.error(f"❌ Error inicializando base de datos: {e}")
-            raise
-
-
-# ============================================================
-# DEPENDENCY
-# ============================================================
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    except SQLAlchemyError as e:
-        logger.error(f"Database error in session: {e}")
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
+            if attempt < max_retries - 1:
+                logger.warning(f"⚠️ Reintentando conexión DB ({attempt + 1}/{max_retries})...")
+                time.sleep(3)
+            else:
+                logger.error(f"❌ Error crítico inicializando DB: {e}")
+                raise
 
 @contextmanager
 def db_session():
-    """Context manager con rollback automático en caso de error"""
+    """Context manager seguro para operaciones atómicas"""
     db = SessionLocal()
     try:
         yield db
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.error(f"Database session error: {e}")
+        logger.error(f"❌ Database session error: {e}")
         raise
     finally:
         db.close()
 
 
 # ============================================================
-# FUNCIONES DE USUARIOS
+# FUNCIONES DE USUARIOS (Corregidas para evitar 500s)
 # ============================================================
-
-def get_user_by_email(email: str) -> Optional[Dict]:
-    try:
-        with db_session() as db:
-            user = db.query(User).filter(User.email == email).first()
-            return user.to_dict() if user else None
-    except SQLAlchemyError as e:
-        logger.error(f"Error buscando usuario por email {email}: {e}")
-        return None
-
-
-def get_user_by_username(username: str) -> Optional[Dict]:
-    try:
-        with db_session() as db:
-            user = db.query(User).filter(User.username == username).first()
-            return user.to_dict() if user else None
-    except SQLAlchemyError as e:
-        logger.error(f"Error buscando usuario por username {username}: {e}")
-        return None
-
-
-def get_user_by_id(user_id: int) -> Optional[Dict]:
-    try:
-        with db_session() as db:
-            user = db.query(User).filter(User.id == user_id).first()
-            return user.to_dict() if user else None
-    except SQLAlchemyError as e:
-        logger.error(f"Error buscando usuario por ID {user_id}: {e}")
-        return None
-
 
 def create_user(username: str, email: str, hashed_password: str) -> Optional[Dict]:
     try:
         with db_session() as db:
+            # Verificación proactiva para evitar IntegrityError (Error 500)
+            existing = db.query(User).filter((User.username == username) | (User.email == email)).first()
+            if existing:
+                return None # O podrías lanzar una excepción personalizada
+            
             user = User(
                 username=username,
                 email=email,
                 hashed_password=hashed_password,
             )
             db.add(user)
-            db.flush()
+            db.flush() 
             db.refresh(user)
-            logger.info(f"✅ Usuario creado: {username} ({email})")
             return user.to_dict()
-    except SQLAlchemyError as e:
-        logger.error(f"Error creando usuario {username}: {e}")
+    except IntegrityError:
+        logger.error(f"❌ Usuario o email ya existe: {username}")
+        return None
+    except Exception as e:
+        logger.error(f"❌ Error inesperado en create_user: {e}")
         return None
 
-
-def update_user_last_login(user_id: int) -> bool:
+def get_user_by_email(email: str) -> Optional[Dict]:
     try:
         with db_session() as db:
-            user = db.query(User).filter(User.id == user_id).first()
-            if user:
-                user.last_login = datetime.now(timezone.utc)
-                db.add(user)
-                return True
-        return False
-    except SQLAlchemyError as e:
-        logger.error(f"Error actualizando último login: {e}")
-        return False
+            user = db.query(User).filter(User.email == email).first()
+            return user.to_dict() if user else None
+    except Exception:
+        return None
 
-
-def load_users(limit: int = 100, offset: int = 0) -> List[Dict]:
-    try:
-        with db_session() as db:
-            users = db.query(User).order_by(
-                User.created_at.desc()
-            ).offset(offset).limit(limit).all()
-            return [u.to_dict() for u in users]
-    except SQLAlchemyError as e:
-        logger.error(f"Error cargando usuarios: {e}")
-        return []
-
-
-# ============================================================
-# FUNCIONES DE HISTORIAL DE CHAT
-# ============================================================
-
-def save_chat_message(
-    username: str,
-    message: str,
-    response: str,
-    session_id: Optional[str] = None,
-    message_type: str = "chat"
-) -> Optional[Dict]:
+def get_user_by_username(username: str) -> Optional[Dict]:
     try:
         with db_session() as db:
             user = db.query(User).filter(User.username == username).first()
-            user_id = user.id if user else None
+            return user.to_dict() if user else None
+    except Exception:
+        return None
 
+# ============================================================
+# ESTADÍSTICAS (Universal para SQLite/Postgres)
+# ============================================================
+
+def get_database_stats() -> Dict:
+    try:
+        with engine.connect() as conn:
+            stats = {}
+            # Conteo básico
+            stats['user_count'] = conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
+            stats['chat_count'] = conn.execute(text("SELECT COUNT(*) FROM chat_history")).scalar()
+            
+            # Filtros temporales usando parámetros (Evita el error de INTERVAL en SQLite)
+            h24 = datetime.now(timezone.utc) - timedelta(hours=24)
+            d7 = datetime.now(timezone.utc) - timedelta(days=7)
+            
+            stats['chats_last_24h'] = conn.execute(
+                text("SELECT COUNT(*) FROM chat_history WHERE timestamp > :limit"),
+                {"limit": h24}
+            ).scalar()
+            
+            stats['active_users_7d'] = conn.execute(
+                text("SELECT COUNT(DISTINCT username) FROM chat_history WHERE timestamp > :limit"),
+                {"limit": d7}
+            ).scalar()
+            
+            return stats
+    except Exception as e:
+        logger.error(f"Error obteniendo estadísticas: {e}")
+        return {"error": str(e)}
+
+# ============================================================
+# HISTORIAL DE CHAT
+# ============================================================
+
+def save_chat_message(username: str, message: str, response: str, session_id: str = None, message_type: str = "chat") -> Optional[Dict]:
+    try:
+        with db_session() as db:
+            user = db.query(User).filter(User.username == username).first()
             chat = ChatHistory(
-                user_id=user_id,
+                user_id=user.id if user else None,
                 username=username,
                 message=message,
                 response=response,
@@ -290,100 +247,6 @@ def save_chat_message(
             db.flush()
             db.refresh(chat)
             return chat.to_dict()
-    except SQLAlchemyError as e:
-        logger.error(f"Error guardando mensaje de chat para {username}: {e}")
-        return None
-
-
-def load_chat_history(limit: int = 1000, offset: int = 0) -> List[Dict]:
-    try:
-        with db_session() as db:
-            history = db.query(ChatHistory).order_by(
-                ChatHistory.timestamp.desc()
-            ).offset(offset).limit(limit).all()
-            return [h.to_dict() for h in history]
-    except SQLAlchemyError as e:
-        logger.error(f"Error cargando historial: {e}")
-        return []
-
-
-def get_user_chat_history(
-    username: str,
-    limit: int = 50,
-    offset: int = 0
-) -> List[Dict]:
-    try:
-        with db_session() as db:
-            history = (
-                db.query(ChatHistory)
-                .filter(ChatHistory.username == username)
-                .order_by(ChatHistory.timestamp.desc())
-                .offset(offset)
-                .limit(limit)
-                .all()
-            )
-            return [h.to_dict() for h in history]
-    except SQLAlchemyError as e:
-        logger.error(f"Error cargando historial de {username}: {e}")
-        return []
-
-
-def get_recent_sessions(username: str, days: int = 7) -> List[str]:
-    try:
-        with db_session() as db:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-            sessions = (
-                db.query(ChatHistory.session_id)
-                .filter(
-                    ChatHistory.username == username,
-                    ChatHistory.session_id.isnot(None),
-                    ChatHistory.timestamp > cutoff
-                )
-                .distinct()
-                .order_by(ChatHistory.timestamp.desc())
-                .limit(20)
-                .all()
-            )
-            return [s[0] for s in sessions if s[0]]
-    except SQLAlchemyError as e:
-        logger.error(f"Error obteniendo sesiones recientes: {e}")
-        return []
-
-
-def cleanup_old_chats(days: int = 90) -> int:
-    try:
-        with db_session() as db:
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
-            result = db.query(ChatHistory).filter(
-                ChatHistory.timestamp < cutoff_date
-            ).delete(synchronize_session=False)
-            if result > 0:
-                logger.info(f"🧹 Eliminados {result} chats antiguos")
-            return result
-    except SQLAlchemyError as e:
-        logger.error(f"Error limpiando chats antiguos: {e}")
-        return 0
-
-
-def get_database_stats() -> Dict:
-    try:
-        with engine.connect() as conn:
-            stats = {}
-            result = conn.execute(text("SELECT COUNT(*) FROM users"))
-            stats['user_count'] = result.scalar()
-            result = conn.execute(text("SELECT COUNT(*) FROM chat_history"))
-            stats['chat_count'] = result.scalar()
-            result = conn.execute(text("""
-                SELECT COUNT(*) FROM chat_history
-                WHERE timestamp > NOW() - INTERVAL '24 hours'
-            """))
-            stats['chats_last_24h'] = result.scalar()
-            result = conn.execute(text("""
-                SELECT COUNT(DISTINCT username) FROM chat_history
-                WHERE timestamp > NOW() - INTERVAL '7 days'
-            """))
-            stats['active_users_7d'] = result.scalar()
-            return stats
     except Exception as e:
-        logger.error(f"Error obteniendo estadísticas: {e}")
-        return {}
+        logger.error(f"Error guardando chat: {e}")
+        return None
