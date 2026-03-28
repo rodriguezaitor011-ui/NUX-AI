@@ -135,7 +135,7 @@ async def contact(request: Request):
 # ============================================================
 
 class ResumenRequest(BaseModel):
-    texto: str = Field(..., min_length=10, max_length=settings.MAX_TEXT_LENGTH)
+    texto: str = Field(..., min_length=10)
     instrucciones: Optional[str] = ""
     modo: str = "general"
     task: str = "summary"
@@ -195,7 +195,14 @@ async def ocr_image_endpoint(request: Request, archivo: UploadFile = File(..., a
         logger.exception("Error inesperado leyendo archivo OCR: %s", e)
         return JSONResponse(status_code=500, content={"error": "Error interno del servidor"})
 
-    if len(contenido) > settings.OCR_MAX_IMAGE_SIZE:
+    is_admin = False
+    token = get_token_from_request(request)
+    if token:
+        payload = decode_token(token)
+        if payload and payload.get("email") in settings.ADMIN_EMAILS:
+            is_admin = True
+
+    if len(contenido) > settings.OCR_MAX_IMAGE_SIZE and not is_admin:
         return JSONResponse(
             status_code=400,
             content={"error": f"Imagen demasiado grande. Máximo {settings.OCR_MAX_IMAGE_SIZE // (1024*1024)} MB."},
@@ -267,7 +274,14 @@ async def resumir(
                     logger.error(f"Error procesando PDF: {e}")
                     return JSONResponse(status_code=500, content={"error": "Error al procesar el PDF"})
 
-        if len(texto) > settings.MAX_TEXT_LENGTH:
+        is_admin = False
+        token = get_token_from_request(request)
+        if token:
+            payload = decode_token(token)
+            if payload and payload.get("email") in settings.ADMIN_EMAILS:
+                is_admin = True
+
+        if len(texto) > settings.MAX_TEXT_LENGTH and not is_admin:
             texto = texto[:settings.MAX_TEXT_LENGTH]
 
         datos = ResumenRequest(texto=texto, instrucciones=instrucciones, modo=modo, task=task)

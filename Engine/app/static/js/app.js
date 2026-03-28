@@ -251,7 +251,10 @@ async function autoProcessSource(source) {
 
         const response = await fetch('/resumir', {
             method: 'POST',
-            headers: { 'Accept': 'application/json' },
+            headers: { 
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+            },
             body: formData
         });
 
@@ -519,7 +522,13 @@ async function confirmarOCR() {
     try {
         const formData = new FormData();
         formData.append('image', pendingOCRFile);
-        const response = await fetch('/api/ocr-image', { method: 'POST', body: formData });
+        const response = await fetch('/api/ocr-image', { 
+            method: 'POST', 
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+            },
+            body: formData 
+        });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Error al extraer el texto');
         if (!data.text || !data.text.trim()) throw new Error('No se detectó texto en la imagen');

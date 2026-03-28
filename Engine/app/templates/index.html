@@ -406,11 +406,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (response.ok && data.document) {
                 // Populate source
-                const title = data.notebook ? data.notebook.title : 'Documento Base';
+                const titleFallback = data.notebook ? data.notebook.title : 'Documento Base';
+                const sourceName = data.document.filename ? data.document.filename : titleFallback;
                 const source = {
                     id: "nb-doc",
-                    name: title,
-                    type: "txt",
+                    name: sourceName,
+                    type: data.document.filename && data.document.filename.endsWith(".pdf") ? "pdf" : "txt",
                     active: true,
                     content: data.document.content,
                     processed: true 
