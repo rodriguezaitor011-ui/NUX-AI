@@ -441,9 +441,9 @@ async def chat_endpoint(request: Request):
                         }
                         
                         # Buscar los últimos mensajes del historial del notebook como resumen para Deepseek
-                        last_chats = db.query(ChatHistory).filter(ChatHistory.notebook_id == notebook_id).order_by(ChatHistory.timestamp.asc()).all()
                         if last_chats and not doc_context["summary"]:
-                            doc_context["summary"] = "\n".join([c.response for c in last_chats if c.message_type == "system_auto"][:1])
+                            # Unimos todos los mensajes system_auto (Resúmenes, Guías, Cuestionarios) para el contexto
+                            doc_context["summary"] = "\n\n---\n\n".join([c.response for c in last_chats if c.message_type == "system_auto"])
             except Exception as e:
                 logger.error(f"Error recuperando doc de cuaderno: {e}")
                 

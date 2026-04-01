@@ -822,7 +822,12 @@ async function ejecutarHerramienta(herramienta) {
             await guardarEnHistorial(mensaje, data.flashcards);
         } else if (data.resumen) {
             agregarMensajeAsistente(data.resumen, data.modelo || 'NXUS o.0.1');
-            const nombreOutput = { 'resumir': 'Resumen ejecutivo', 'analizar': 'Análisis estructural' };
+            const nombreOutput = { 
+                'resumir': 'Resumen ejecutivo', 
+                'analizar': 'Análisis estructural',
+                'quiz': 'Cuestionario de Evaluación',
+                'report': 'Guía de Cuaderno'
+            };
             añadirOutput(herramienta, nombreOutput[herramienta] || 'Output', data.resumen);
             await guardarEnHistorial(mensaje, data.resumen);
         } else if (data.error) {
@@ -977,7 +982,13 @@ function renderOutputs() {
         return; 
     }
     outputSection.style.display = 'block';
-    const iconos = { 'resumir': '📝', 'flashcards': '🎴', 'analizar': '📊' };
+    const iconos = { 
+        'resumir': '📝', 
+        'flashcards': '🎴', 
+        'analizar': '📊',
+        'quiz': '❓',
+        'report': '📘'
+    };
     outputList.innerHTML = toolOutputs.slice(-5).reverse().map(output => `
         <div class="output-item" onclick="verOutput('${output.id}')">
             <span class="output-icon">${iconos[output.tipo] || '📄'}</span>
@@ -1604,7 +1615,10 @@ async function ejecutarHerramientaMindmap() {
         formData.append('task', 'mindmap');
         const response = await fetch('/resumir', {
             method: 'POST',
-            headers: { 'Accept': 'application/json' },
+            headers: { 
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+            },
             body: formData
         });
         const data = await response.json();
