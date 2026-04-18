@@ -57,6 +57,21 @@ class Settings:
 
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "10"))
+    
+    # Cache Configuration
+    CACHE_ENABLED: bool = os.getenv("CACHE_ENABLED", "True").lower() == "true"
+    CACHE_TTL_HOURS: int = int(os.getenv("CACHE_TTL_HOURS", "24"))
+    CACHE_DB_PATH: str = os.getenv("CACHE_DB_PATH", "nuxai_cache.db")
+    
+    # CFIS Mode Configuration
+    CFIS_MODE_ENABLED: bool = os.getenv("CFIS_MODE_ENABLED", "True").lower() == "true"
+    
+    # Wolfram Alpha API (para verificación matemática)
+    WOLFRAM_APP_ID: str = os.getenv("WOLFRAM_APP_ID", "")
+    
+    # Cost Optimization
+    COST_OPTIMIZATION_ENABLED: bool = os.getenv("COST_OPTIMIZATION_ENABLED", "True").lower() == "true"
+    PREFER_CHEAP_MODELS: bool = os.getenv("PREFER_CHEAP_MODELS", "True").lower() == "true"
 
     # App
     APP_NAME: str = "NUX IA"

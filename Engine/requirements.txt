@@ -37,5 +37,9 @@ sqlalchemy==2.0.38
 psycopg2-binary==2.9.10
 alembic==1.15.1
 
+# Cache & Optimization
+redis==5.2.0
+# wolframalpha==5.0.0  # Descomentar cuando tengas API key de Wolfram Alpha
+
 # Testing
 pytest==8.3.4
