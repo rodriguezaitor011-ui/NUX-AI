@@ -10,7 +10,6 @@ from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.routes import router, limiter
-from app.cfis_routes import router as cfis_router
 
 # Configurar logging
 logging.basicConfig(
@@ -77,7 +76,6 @@ from app.user_routes import router as user_router
 app.include_router(user_router, tags=["users"])
 from app.notebook_routes import router as notebook_router
 app.include_router(notebook_router, tags=["notebooks"])
-app.include_router(cfis_router)
 
 # Middleware de Seguridad y Logs corregido
 @app.middleware("http")
